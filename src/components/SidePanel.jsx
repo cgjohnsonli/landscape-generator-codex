@@ -34,16 +34,22 @@ export default function SidePanel() {
 }
 
 function LabelPanel() {
+  const { layerSettings, toggleLayerVisibility, toggleLayerLock } = useStore()
   return (
     <div>
       <div style={styles.sectionTitle}>用地类型图例</div>
-      {LABELS.map(l => (
-        <div key={l.id} style={styles.legendRow}>
-          <div style={{ ...styles.legendSwatch, background: l.color }} />
-          <span style={styles.legendText}>{l.name}</span>
-          <span style={styles.legendId}>#{l.id}</span>
-        </div>
-      ))}
+      {LABELS.map(l => {
+        const layer = layerSettings[l.id] ?? { visible: true, locked: false }
+        return (
+          <div key={l.id} style={styles.legendRow}>
+            <div style={{ ...styles.legendSwatch, background: l.color, opacity: layer.visible ? 1 : 0.35 }} />
+            <span style={{ ...styles.legendText, opacity: layer.visible ? 1 : 0.5 }}>{l.name}</span>
+            <button style={{ ...styles.layerBtn, ...(layer.visible ? styles.layerBtnOn : {}) }} onClick={() => toggleLayerVisibility(l.id)} title="显示/隐藏">👁</button>
+            <button style={{ ...styles.layerBtn, ...(layer.locked ? styles.layerBtnOn : {}) }} onClick={() => toggleLayerLock(l.id)} title="锁定/解锁">🔒</button>
+            <span style={styles.legendId}>#{l.id}</span>
+          </div>
+        )
+      })}
       <div style={{ marginTop: '20px' }}>
         <div style={styles.sectionTitle}>操作说明</div>
         <div style={styles.helpText}>

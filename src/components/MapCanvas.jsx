@@ -12,6 +12,7 @@ export default function MapCanvas() {
     activeTool,
     distMap, showAnalysis, analysisType,
     heatmapScale, heatmapGamma,
+    layerSettings,
   } = useStore()
 
   const editState = useRef({
@@ -40,12 +41,13 @@ export default function MapCanvas() {
     const { data } = imgData
     for (let i = 0; i < raster.data.length; i++) {
       const labelId = raster.data[i]
+      const layer = layerSettings[labelId] ?? { visible: true }
       const [r, g, b] = LABELS[labelId]?.rgb ?? [100, 116, 139]
       const base = i * 4
       data[base] = r
       data[base + 1] = g
       data[base + 2] = b
-      data[base + 3] = 255
+      data[base + 3] = layer.visible ? 255 : 0
     }
     ctx.putImageData(imgData, 0, 0)
 
@@ -61,7 +63,7 @@ export default function MapCanvas() {
       const heatImgData = distToImageData(distMap, raster.width, raster.height, maxDist, heatmapGamma)
       ctx.putImageData(heatImgData, 0, 0)
     }
-  }, [raster, renderTick, opacity, showAnalysis, distMap, analysisType, heatmapScale, heatmapGamma])
+  }, [raster, renderTick, opacity, showAnalysis, distMap, analysisType, heatmapScale, heatmapGamma, layerSettings])
 
   useEffect(() => {
     const c = canvasRef.current
@@ -107,7 +109,14 @@ export default function MapCanvas() {
     const { raster: r, activeLabel: lbl, brushRadius: br } = useStore.getState()
     if (!r) return
     const scale = r.cellSize ?? 1
-    const changed = paintBrush(r, px * scale, py * scale, br * scale, lbl)
+    const changed = paintBrush(
+      r,
+      px * scale,
+      py * scale,
+      br * scale,
+      lbl,
+      (oldLabel) => !(layerSettings[oldLabel]?.locked),
+    )
     if (changed.length === 0) return
 
     const changedMap = editState.current.strokeChangedMap
@@ -119,7 +128,7 @@ export default function MapCanvas() {
       }
     }
     useStore.setState({ renderTick: useStore.getState().renderTick + 1 })
-  }, [])
+  }, [layerSettings])
 
   const drawPolygonPreview = useCallback((mouseX, mouseY) => {
     const overlay = overlayRef.current
@@ -153,14 +162,14 @@ export default function MapCanvas() {
     const { raster: r, activeLabel: lbl, history: hist } = useStore.getState()
     if (!r) return
     const rasterPts = pts.map(({ x, y }) => ({ x: toRasterPixel(x), y: toRasterPixel(y) }))
-    const changed = fillPolygon(r, rasterPts, lbl)
+    const changed = fillPolygon(r, rasterPts, lbl, (oldLabel) => !(layerSettings[oldLabel]?.locked))
     if (changed.length > 0) {
       pushHistory(hist, changedToCommand(changed, '多边形'))
       useStore.setState({ history: { ...hist }, renderTick: useStore.getState().renderTick + 1 })
     }
     editState.current.polygonPoints = []
     overlayRef.current?.getContext('2d').clearRect(0, 0, overlayRef.current.width, overlayRef.current.height)
-  }, [toRasterPixel])
+  }, [toRasterPixel, layerSettings])
 
   const onMouseDown = useCallback((e) => {
     const [px, py] = getCanvasPos(e)

@@ -4,6 +4,11 @@
  */
 import { create } from 'zustand'
 import { createHistory, pushHistory, undo, redo, canUndo, canRedo, changedToCommand } from '../core/history.js'
+import { LABELS } from '../core/raster.js'
+
+const createDefaultLayers = () => Object.fromEntries(
+  LABELS.map((l) => [l.id, { visible: true, locked: false }])
+)
 
 export const useStore = create((set, get) => ({
   // ── 图像 ──
@@ -39,6 +44,9 @@ export const useStore = create((set, get) => ({
   heatmapScale: 1,
   heatmapGamma: 0.7,
 
+  // ── 图层 ──
+  layerSettings: createDefaultLayers(),
+
   // ── 视图 ──
   activePanel: 'label',   // 'label' | 'stats' | 'analysis'
 
@@ -55,6 +63,18 @@ export const useStore = create((set, get) => ({
   setBrushRadius: (r) => set({ brushRadius: r }),
   setOpacity: (v) => set({ opacity: v }),
   setActivePanel: (p) => set({ activePanel: p }),
+  toggleLayerVisibility: (id) => set((state) => ({
+    layerSettings: {
+      ...state.layerSettings,
+      [id]: { ...state.layerSettings[id], visible: !state.layerSettings[id]?.visible },
+    },
+  })),
+  toggleLayerLock: (id) => set((state) => ({
+    layerSettings: {
+      ...state.layerSettings,
+      [id]: { ...state.layerSettings[id], locked: !state.layerSettings[id]?.locked },
+    },
+  })),
 
   setDistMap: (distMap, coverageStats, suggestions, analysisType = 'green') =>
     set({ distMap, coverageStats, suggestions, analysisType, showAnalysis: true }),

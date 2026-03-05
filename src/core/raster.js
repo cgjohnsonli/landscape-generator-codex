@@ -99,7 +99,7 @@ export function computeStats(raster) {
  * 多边形内的格元批量更新
  * polygon: [{x, y}, ...] 像素坐标（相对于 canvas）
  */
-export function fillPolygon(raster, polygonPx, labelId) {
+export function fillPolygon(raster, polygonPx, labelId, canEditCell = () => true) {
   if (polygonPx.length < 3) return []
   const changed = []
 
@@ -118,7 +118,7 @@ export function fillPolygon(raster, polygonPx, labelId) {
       if (pointInPolygon(cx, cy, polygonPx)) {
         const idx = r * raster.width + c
         const old = raster.data[idx]
-        if (old !== labelId) {
+        if (old !== labelId && canEditCell(old, idx)) {
           changed.push({ idx, old, labelId })
           raster.data[idx] = labelId
         }
@@ -143,7 +143,7 @@ function pointInPolygon(x, y, polygon) {
 /**
  * 笔刷涂抹：以 (px, py) 为中心，radius 为半径的圆形区域
  */
-export function paintBrush(raster, px, py, radiusPx, labelId) {
+export function paintBrush(raster, px, py, radiusPx, labelId, canEditCell = () => true) {
   const changed = []
   const r2 = radiusPx * radiusPx
   const cs = raster.cellSize
@@ -161,7 +161,7 @@ export function paintBrush(raster, px, py, radiusPx, labelId) {
       if (dx * dx + dy * dy <= r2) {
         const idx = row * raster.width + col
         const old = raster.data[idx]
-        if (old !== labelId) {
+        if (old !== labelId && canEditCell(old, idx)) {
           changed.push({ idx, old, labelId })
           raster.data[idx] = labelId
         }
