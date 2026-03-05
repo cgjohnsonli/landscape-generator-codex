@@ -19,6 +19,8 @@ export default function Toolbar() {
     activeTool, setActiveTool,
     brushRadius, setBrushRadius,
     opacity, setOpacity,
+    editTarget, setEditTarget,
+    designabilityPaintValue, setDesignabilityPaintValue,
     undo, redo, canUndo, canRedo,
     raster,
     setDistMap, setProcessing,
@@ -92,11 +94,49 @@ export default function Toolbar() {
 
       <div style={styles.divider} />
 
-      {/* 标签快捷栏 */}
       <div style={styles.group}>
-        <div style={styles.groupLabel}>标签</div>
-        <LabelQuickPicker />
+        <div style={styles.groupLabel}>编辑属性</div>
+        <div style={styles.rowBtns}>
+          <button
+            style={{ ...styles.modeBtn, ...(editTarget === 'landuse' ? styles.modeBtnActive : {}) }}
+            onClick={() => setEditTarget('landuse')}
+          >
+            用地
+          </button>
+          <button
+            style={{ ...styles.modeBtn, ...(editTarget === 'designability' ? styles.modeBtnActive : {}) }}
+            onClick={() => setEditTarget('designability')}
+          >
+            可改
+          </button>
+        </div>
       </div>
+
+      <div style={styles.divider} />
+
+      {/* 标签快捷栏 */}
+      {editTarget === 'landuse' ? (
+        <div style={styles.group}>
+          <div style={styles.groupLabel}>标签</div>
+          <LabelQuickPicker />
+        </div>
+      ) : (
+        <div style={styles.group}>
+          <div style={styles.groupLabel}>可改属性</div>
+          <button
+            style={{ ...styles.actionBtn, ...(designabilityPaintValue === 1 ? styles.modeBtnActive : {}) }}
+            onClick={() => setDesignabilityPaintValue(1)}
+          >
+            标记可更新设计
+          </button>
+          <button
+            style={{ ...styles.actionBtn, ...(designabilityPaintValue === 0 ? styles.modeBtnActive : {}) }}
+            onClick={() => setDesignabilityPaintValue(0)}
+          >
+            标记不可更新
+          </button>
+        </div>
+      )}
 
       <div style={styles.divider} />
 
@@ -236,6 +276,22 @@ const styles = {
     marginBottom: '2px',
   },
   divider: { height: '1px', background: '#1e2d3d', margin: '2px 0' },
+  rowBtns: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' },
+  modeBtn: {
+    padding: '6px 0',
+    background: 'transparent',
+    border: '1px solid #1e2d3d',
+    color: '#64748b',
+    fontSize: '10px',
+    fontFamily: "'DM Mono', monospace",
+    borderRadius: '3px',
+    cursor: 'pointer',
+  },
+  modeBtnActive: {
+    borderColor: '#ef4444',
+    color: '#fecaca',
+    background: '#7f1d1d33',
+  },
   toolBtn: {
     display: 'flex', alignItems: 'center', gap: '6px',
     padding: '6px 8px',

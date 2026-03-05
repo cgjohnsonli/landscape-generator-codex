@@ -10,6 +10,8 @@ export default function MapCanvas() {
   const {
     raster, sourceImage, renderTick, opacity,
     activeTool,
+    designabilityMap,
+    showDesignability,
     distMap, showAnalysis, analysisType,
     heatmapScale, heatmapGamma,
     layerSettings,
@@ -63,7 +65,20 @@ export default function MapCanvas() {
       const heatImgData = distToImageData(distMap, raster.width, raster.height, maxDist, heatmapGamma)
       ctx.putImageData(heatImgData, 0, 0)
     }
-  }, [raster, renderTick, opacity, showAnalysis, distMap, analysisType, heatmapScale, heatmapGamma, layerSettings])
+
+    if (showDesignability && designabilityMap) {
+      const mask = new ImageData(raster.width, raster.height)
+      for (let i = 0; i < designabilityMap.length; i++) {
+        if (designabilityMap[i] !== 1) continue
+        const base = i * 4
+        mask.data[base] = 239
+        mask.data[base + 1] = 68
+        mask.data[base + 2] = 68
+        mask.data[base + 3] = 110
+      }
+      ctx.putImageData(mask, 0, 0)
+    }
+  }, [raster, renderTick, opacity, showAnalysis, distMap, analysisType, heatmapScale, heatmapGamma, layerSettings, showDesignability, designabilityMap])
 
   useEffect(() => {
     const c = canvasRef.current
@@ -98,6 +113,11 @@ export default function MapCanvas() {
   const commitBrushStroke = useCallback(() => {
     const changedMap = editState.current.strokeChangedMap
     if (!changedMap || changedMap.size === 0) return
+    const first = changedMap.values().next().value
+    if (first?.target === 'designability') {
+      changedMap.clear()
+      return
+    }
     const { history: hist } = useStore.getState()
     const changed = Array.from(changedMap.entries()).map(([idx, rec]) => ({ idx, old: rec.old, labelId: rec.labelId }))
     pushHistory(hist, changedToCommand(changed, '笔刷'))
@@ -106,23 +126,32 @@ export default function MapCanvas() {
   }, [])
 
   const applyBrush = useCallback((px, py) => {
-    const { raster: r, activeLabel: lbl, brushRadius: br } = useStore.getState()
+    const {
+      raster: r,
+      activeLabel: lbl,
+      brushRadius: br,
+      editTarget: target,
+      designabilityPaintValue: paintValue,
+      designabilityMap: dMap,
+    } = useStore.getState()
     if (!r) return
     const scale = r.cellSize ?? 1
-    const changed = paintBrush(
-      r,
-      px * scale,
-      py * scale,
-      br * scale,
-      lbl,
-      (oldLabel) => !(layerSettings[oldLabel]?.locked),
-    )
+    const changed = target === 'designability'
+      ? paintDesignability(dMap, r, px * scale, py * scale, br * scale, paintValue, (idx) => !(layerSettings[r.data[idx]]?.locked))
+      : paintBrush(
+        r,
+        px * scale,
+        py * scale,
+        br * scale,
+        lbl,
+        (oldLabel) => !(layerSettings[oldLabel]?.locked),
+      )
     if (changed.length === 0) return
 
     const changedMap = editState.current.strokeChangedMap
     for (const item of changed) {
       if (!changedMap.has(item.idx)) {
-        changedMap.set(item.idx, { old: item.old, labelId: item.labelId })
+        changedMap.set(item.idx, { old: item.old, labelId: item.labelId, target })
       } else {
         changedMap.get(item.idx).labelId = item.labelId
       }
@@ -159,13 +188,26 @@ export default function MapCanvas() {
   const finishPolygon = useCallback(() => {
     const pts = editState.current.polygonPoints
     if (pts.length < 3) return
-    const { raster: r, activeLabel: lbl, history: hist } = useStore.getState()
+    const {
+      raster: r,
+      activeLabel: lbl,
+      history: hist,
+      editTarget: target,
+      designabilityPaintValue: paintValue,
+      designabilityMap: dMap,
+    } = useStore.getState()
     if (!r) return
     const rasterPts = pts.map(({ x, y }) => ({ x: toRasterPixel(x), y: toRasterPixel(y) }))
-    const changed = fillPolygon(r, rasterPts, lbl, (oldLabel) => !(layerSettings[oldLabel]?.locked))
+    const changed = target === 'designability'
+      ? fillDesignability(dMap, r, rasterPts, paintValue, (idx) => !(layerSettings[r.data[idx]]?.locked))
+      : fillPolygon(r, rasterPts, lbl, (oldLabel) => !(layerSettings[oldLabel]?.locked))
     if (changed.length > 0) {
-      pushHistory(hist, changedToCommand(changed, '多边形'))
-      useStore.setState({ history: { ...hist }, renderTick: useStore.getState().renderTick + 1 })
+      if (target === 'landuse') {
+        pushHistory(hist, changedToCommand(changed, '多边形'))
+        useStore.setState({ history: { ...hist }, renderTick: useStore.getState().renderTick + 1 })
+      } else {
+        useStore.setState({ renderTick: useStore.getState().renderTick + 1 })
+      }
     }
     editState.current.polygonPoints = []
     overlayRef.current?.getContext('2d').clearRect(0, 0, overlayRef.current.width, overlayRef.current.height)
@@ -253,7 +295,10 @@ export default function MapCanvas() {
     const r = useStore.getState().brushRadius
     ctx.beginPath()
     ctx.arc(px, py, r, 0, Math.PI * 2)
-    ctx.strokeStyle = LABELS[useStore.getState().activeLabel]?.color ?? '#22c55e'
+    const st = useStore.getState()
+    ctx.strokeStyle = st.editTarget === 'designability'
+      ? (st.designabilityPaintValue === 1 ? '#ef4444' : '#94a3b8')
+      : (LABELS[st.activeLabel]?.color ?? '#22c55e')
     ctx.lineWidth = 1
     ctx.setLineDash([3, 2])
     ctx.stroke()
@@ -318,6 +363,70 @@ export default function MapCanvas() {
       <div style={styles.zoomBadge}>缩放 {Math.round(zoom * 100)}%</div>
     </div>
   )
+}
+
+function paintDesignability(map, raster, px, py, radiusPx, value, canEditIdx = () => true) {
+  if (!map) return []
+  const changed = []
+  const r2 = radiusPx * radiusPx
+  const cs = raster.cellSize
+  const minCol = Math.max(0, Math.floor((px - radiusPx) / cs))
+  const maxCol = Math.min(raster.width - 1, Math.ceil((px + radiusPx) / cs))
+  const minRow = Math.max(0, Math.floor((py - radiusPx) / cs))
+  const maxRow = Math.min(raster.height - 1, Math.ceil((py + radiusPx) / cs))
+
+  for (let row = minRow; row <= maxRow; row++) {
+    for (let col = minCol; col <= maxCol; col++) {
+      const cx = (col + 0.5) * cs
+      const cy = (row + 0.5) * cs
+      const dx = cx - px
+      const dy = cy - py
+      if (dx * dx + dy * dy > r2) continue
+      const idx = row * raster.width + col
+      const old = map[idx]
+      if (old === value || !canEditIdx(idx)) continue
+      map[idx] = value
+      changed.push({ idx, old, labelId: value })
+    }
+  }
+  return changed
+}
+
+function fillDesignability(map, raster, polygonPx, value, canEditIdx = () => true) {
+  if (!map || polygonPx.length < 3) return []
+  const changed = []
+  const xs = polygonPx.map(p => p.x)
+  const ys = polygonPx.map(p => p.y)
+  const minCol = Math.max(0, Math.floor(Math.min(...xs) / raster.cellSize))
+  const maxCol = Math.min(raster.width - 1, Math.ceil(Math.max(...xs) / raster.cellSize))
+  const minRow = Math.max(0, Math.floor(Math.min(...ys) / raster.cellSize))
+  const maxRow = Math.min(raster.height - 1, Math.ceil(Math.max(...ys) / raster.cellSize))
+
+  for (let row = minRow; row <= maxRow; row++) {
+    for (let col = minCol; col <= maxCol; col++) {
+      const cx = (col + 0.5) * raster.cellSize
+      const cy = (row + 0.5) * raster.cellSize
+      if (!pointInPolygon(cx, cy, polygonPx)) continue
+      const idx = row * raster.width + col
+      const old = map[idx]
+      if (old === value || !canEditIdx(idx)) continue
+      map[idx] = value
+      changed.push({ idx, old, labelId: value })
+    }
+  }
+  return changed
+}
+
+function pointInPolygon(x, y, polygon) {
+  let inside = false
+  const n = polygon.length
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = polygon[i].x, yi = polygon[i].y
+    const xj = polygon[j].x, yj = polygon[j].y
+    const intersect = ((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)
+    if (intersect) inside = !inside
+  }
+  return inside
 }
 
 const styles = {

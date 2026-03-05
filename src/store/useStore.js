@@ -24,6 +24,7 @@ export const useStore = create((set, get) => ({
 
   // ── 点阵 ──
   raster: null,            // RasterGrid
+  designabilityMap: null,  // Uint8Array: 0=不可改,1=可改
   renderTick: 0,           // 用于触发 canvas 重绘
 
   // ── 编辑工具 ──
@@ -31,6 +32,9 @@ export const useStore = create((set, get) => ({
   activeLabel: 3,          // 当前绘制标签（默认绿地）
   brushRadius: 20,         // 像素半径
   opacity: 0.85,           // 叠加层透明度
+  editTarget: 'landuse',   // 'landuse' | 'designability'
+  designabilityPaintValue: 1,
+  showDesignability: false,
 
   // ── 历史 ──
   history: createHistory(),
@@ -55,13 +59,20 @@ export const useStore = create((set, get) => ({
   setClusters: (clusters) => set({ clusters }),
   setClusterToLabel: (map) => set({ clusterToLabel: map }),
   setProcessing: (isProcessing, msg = '') => set({ isProcessing, processingMsg: msg }),
-  setRaster: (raster) => set({ raster, renderTick: get().renderTick + 1 }),
+  setRaster: (raster) => set({
+    raster,
+    designabilityMap: raster ? new Uint8Array(raster.width * raster.height) : null,
+    renderTick: get().renderTick + 1,
+  }),
   triggerRender: () => set({ renderTick: get().renderTick + 1 }),
 
   setActiveTool: (t) => set({ activeTool: t }),
   setActiveLabel: (id) => set({ activeLabel: id }),
   setBrushRadius: (r) => set({ brushRadius: r }),
   setOpacity: (v) => set({ opacity: v }),
+  setEditTarget: (v) => set({ editTarget: v }),
+  setDesignabilityPaintValue: (v) => set({ designabilityPaintValue: v }),
+  setShowDesignability: (v) => set({ showDesignability: v }),
   setActivePanel: (p) => set({ activePanel: p }),
   toggleLayerVisibility: (id) => set((state) => ({
     layerSettings: {

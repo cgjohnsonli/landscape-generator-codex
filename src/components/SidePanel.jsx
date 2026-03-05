@@ -49,13 +49,29 @@ export default function SidePanel() {
 function LabelPanel() {
   const {
     layerSettings,
+    designabilityMap,
+    showDesignability,
+    setShowDesignability,
     toggleLayerVisibility,
     toggleLayerLock,
     toggleOtherLayerVisibility,
     toggleOtherLayerLock,
+    raster,
   } = useStore()
+  const designableCount = designabilityMap?.reduce((acc, v) => acc + (v === 1 ? 1 : 0), 0) ?? 0
+  const totalCells = raster?.data?.length ?? 0
+  const designablePct = totalCells > 0 ? ((designableCount / totalCells) * 100).toFixed(1) : '0.0'
   return (
     <div>
+      <div style={styles.sectionTitle}>更新设计属性</div>
+      <button
+        style={{ ...styles.toggleBtn, ...(showDesignability ? styles.toggleBtnOn : {}) }}
+        onClick={() => setShowDesignability(!showDesignability)}
+      >
+        {showDesignability ? '✅ 显示可改遮罩' : '◻ 显示可改遮罩'}
+      </button>
+      <div style={styles.designMeta}>可更新：{designableCount} / {totalCells}（{designablePct}%）</div>
+
       <div style={styles.sectionTitle}>用地类型图例</div>
       {LABELS.map(l => {
         const layer = layerSettings[l.id] ?? { visible: true, locked: false }
@@ -276,6 +292,30 @@ const styles = {
   coverRow: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' },
   coverLabel: { fontSize: '10px', color: '#64748b', width: '50px', flexShrink: 0, fontFamily: "'DM Mono', monospace" },
   coverPct: { fontSize: '10px', color: '#22c55e', width: '35px', textAlign: 'right', fontFamily: "'DM Mono', monospace" },
+
+  toggleBtn: {
+    width: '100%',
+    textAlign: 'left',
+    padding: '6px 8px',
+    background: 'transparent',
+    color: '#94a3b8',
+    border: '1px solid #1e2d3d',
+    borderRadius: '4px',
+    fontSize: '11px',
+    fontFamily: "'DM Mono', monospace",
+    cursor: 'pointer',
+    marginBottom: '6px',
+  },
+  toggleBtnOn: {
+    borderColor: '#ef4444',
+    color: '#fecaca',
+    background: '#7f1d1d33',
+  },
+  designMeta: { fontSize: '10px', color: '#64748b', marginBottom: '12px', fontFamily: "'DM Mono', monospace" },
+  bandRow: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' },
+  bandDot: { width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0 },
+  bandLabel: { flex: 1, fontSize: '10px', color: '#94a3b8' },
+  bandPct: { fontSize: '10px', color: '#cbd5e1', fontFamily: "'DM Mono', monospace" },
 
   suggCard: {
     padding: '10px', marginBottom: '10px',
