@@ -8,7 +8,7 @@ const TABS = [
 ]
 
 export default function SidePanel() {
-  const { activePanel, setActivePanel, raster, suggestions, coverageStats } = useStore()
+  const { activePanel, setActivePanel, raster, suggestions, coverageStats, analysisType } = useStore()
 
   return (
     <div style={styles.panel}>
@@ -27,7 +27,7 @@ export default function SidePanel() {
       <div style={styles.body}>
         {activePanel === 'label' && <LabelPanel />}
         {activePanel === 'stats' && <StatsPanel raster={raster} />}
-        {activePanel === 'analysis' && <AnalysisPanel suggestions={suggestions} coverageStats={coverageStats} />}
+        {activePanel === 'analysis' && <AnalysisPanel suggestions={suggestions} coverageStats={coverageStats} analysisType={analysisType} />}
       </div>
     </div>
   )
@@ -86,16 +86,16 @@ function StatsPanel({ raster }) {
   )
 }
 
-function AnalysisPanel({ suggestions, coverageStats }) {
+function AnalysisPanel({ suggestions, coverageStats, analysisType }) {
   if (!suggestions) return (
     <div style={styles.empty}>
-      点击工具栏「绿地分析」按钮<br/>运行空间分析
+点击工具栏「运行分析」按钮<br/>运行空间分析热力图
     </div>
   )
 
   return (
     <div>
-      <div style={styles.sectionTitle}>绿地服务圈覆盖</div>
+      <div style={styles.sectionTitle}>{analysisType === 'road' ? '道路可达性覆盖' : '绿地服务圈覆盖'}</div>
       {coverageStats?.map(s => (
         <div key={s.threshold} style={styles.coverRow}>
           <span style={styles.coverLabel}>{s.threshold}m 圈</span>

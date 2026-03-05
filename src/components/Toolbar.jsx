@@ -1,7 +1,12 @@
 import { useStore } from '../store/useStore.js'
 import { LABELS } from '../core/raster.js'
 import { saveProject } from '../core/db.js'
-import { greenServiceDistance, coverageStats, generateSuggestions } from '../core/analysis.js'
+import { greenServiceDistance, roadServiceDistance, coverageStats, generateSuggestions, generateRoadSuggestions } from '../core/analysis.js'
+
+const ANALYSIS_OPTIONS = [
+  { id: 'green', label: '绿地可达性' },
+  { id: 'road', label: '道路可达性' },
+]
 
 const TOOLS = [
   { id: 'brush',   icon: '⬤', label: '笔刷' },
@@ -18,6 +23,7 @@ export default function Toolbar() {
     raster,
     setDistMap, setProcessing,
     showAnalysis, setShowAnalysis,
+    analysisType,
     imageName,
   } = useStore()
 
@@ -26,12 +32,24 @@ export default function Toolbar() {
 
   const runAnalysis = async () => {
     if (!raster) return
+
+    if (analysisType === 'road') {
+      setProcessing(true, '计算道路可达性...')
+      await new Promise(r => setTimeout(r, 30))
+      const dist = roadServiceDistance(raster, 2)
+      const stats = coverageStats(dist, raster.cellSize, [100, 300, 500])
+      const suggestions = generateRoadSuggestions(raster, dist)
+      setDistMap(dist, stats, suggestions, 'road')
+      setProcessing(false)
+      return
+    }
+
     setProcessing(true, '计算绿地服务圈...')
     await new Promise(r => setTimeout(r, 30))
     const dist = greenServiceDistance(raster, 3)
     const stats = coverageStats(dist, raster.cellSize)
     const suggestions = generateSuggestions(raster, dist)
-    setDistMap(dist, stats, suggestions)
+    setDistMap(dist, stats, suggestions, 'green')
     setProcessing(false)
   }
 
@@ -113,8 +131,17 @@ export default function Toolbar() {
 
       {/* 分析 */}
       <div style={styles.group}>
+        <select
+          style={styles.select}
+          value={analysisType}
+          onChange={(e) => useStore.setState({ analysisType: e.target.value })}
+        >
+          {ANALYSIS_OPTIONS.map((o) => (
+            <option key={o.id} value={o.id}>{o.label}</option>
+          ))}
+        </select>
         <button style={styles.analysisBtn} onClick={runAnalysis}>
-          ◎ 绿地分析
+          ◎ 运行分析
         </button>
         {showAnalysis && (
           <button style={styles.actionBtn} onClick={() => setShowAnalysis(false)}>
@@ -135,7 +162,7 @@ export default function Toolbar() {
 
 function LabelQuickPicker() {
   const { activeLabel, setActiveLabel } = useStore()
-  const visible = LABELS
+  const visible = LABELS.slice(0, 12)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
       {visible.map(l => (
@@ -211,6 +238,17 @@ const styles = {
   actionBtnDisabled: {
     opacity: 0.4,
     cursor: 'not-allowed',
+  },
+  select: {
+    width: '100%',
+    background: '#0d1117',
+    border: '1px solid #1e2d3d',
+    color: '#cbd5e1',
+    padding: '6px 8px',
+    fontSize: '11px',
+    fontFamily: "'DM Mono', monospace",
+    borderRadius: '3px',
+    outline: 'none',
   },
   analysisBtn: {
     padding: '7px 8px',
