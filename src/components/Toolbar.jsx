@@ -24,6 +24,8 @@ export default function Toolbar() {
     setDistMap, setProcessing,
     showAnalysis, setShowAnalysis,
     analysisType,
+    heatmapScale, setHeatmapScale,
+    heatmapGamma, setHeatmapGamma,
     imageName,
   } = useStore()
 
@@ -134,7 +136,14 @@ export default function Toolbar() {
         <select
           style={styles.select}
           value={analysisType}
-          onChange={(e) => useStore.setState({ analysisType: e.target.value })}
+          onChange={(e) => {
+            const t = e.target.value
+            useStore.setState({
+              analysisType: t,
+              heatmapScale: t === 'road' ? 0.8 : 1,
+              heatmapGamma: t === 'road' ? 0.6 : 0.7,
+            })
+          }}
         >
           {ANALYSIS_OPTIONS.map((o) => (
             <option key={o.id} value={o.id}>{o.label}</option>
@@ -143,6 +152,30 @@ export default function Toolbar() {
         <button style={styles.analysisBtn} onClick={runAnalysis}>
           ◎ 运行分析
         </button>
+        {showAnalysis && (
+          <>
+            <div style={styles.groupLabel}>热力范围 {heatmapScale.toFixed(1)}×</div>
+            <input
+              type="range"
+              min="0.4"
+              max="2.0"
+              step="0.1"
+              value={heatmapScale}
+              style={styles.slider}
+              onChange={(e) => setHeatmapScale(parseFloat(e.target.value))}
+            />
+            <div style={styles.groupLabel}>梯度对比 {heatmapGamma.toFixed(1)}</div>
+            <input
+              type="range"
+              min="0.4"
+              max="1.6"
+              step="0.1"
+              value={heatmapGamma}
+              style={styles.slider}
+              onChange={(e) => setHeatmapGamma(parseFloat(e.target.value))}
+            />
+          </>
+        )}
         {showAnalysis && (
           <button style={styles.actionBtn} onClick={() => setShowAnalysis(false)}>
             关闭热力图

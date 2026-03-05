@@ -86,7 +86,7 @@ export function coverageStats(dist, cellSizeM, thresholds = [300, 500, 1000]) {
 /**
  * 将距离图渲染为 ImageData（热力图色彩：绿→黄→红→灰）
  */
-export function distToImageData(dist, width, height, maxDist) {
+export function distToImageData(dist, width, height, maxDist, gamma = 0.7) {
   const imgData = new Uint8ClampedArray(width * height * 4)
   for (let i = 0; i < dist.length; i++) {
     const base = i * 4
@@ -95,7 +95,8 @@ export function distToImageData(dist, width, height, maxDist) {
       imgData[base] = 0; imgData[base+1] = 0; imgData[base+2] = 0; imgData[base+3] = 0
       continue
     }
-    const t = Math.min(d / maxDist, 1)
+    const normalized = Math.min(d / maxDist, 1)
+    const t = Math.pow(normalized, gamma)
     const [r, g, b] = heatColor(t)
     imgData[base] = r; imgData[base+1] = g; imgData[base+2] = b; imgData[base+3] = 180
   }
