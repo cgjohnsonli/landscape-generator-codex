@@ -120,13 +120,12 @@ function guessLabel([r, g, b]) {
   const scores = [
     [0, 0],
     [1, Math.abs(r - 217) + Math.abs(g - 119) + Math.abs(b - 6)],
-    [2, Math.abs(r - 107) + Math.abs(g - 114) + Math.abs(b - 128)],
+    [2, Math.abs(r - 156) + Math.abs(g - 163) + Math.abs(b - 175)],
     [3, Math.abs(r - 22) + Math.abs(g - 163) + Math.abs(b - 74)],
     [4, Math.abs(r - 37) + Math.abs(g - 99) + Math.abs(b - 235)],
     [5, Math.abs(r - 202) + Math.abs(g - 138) + Math.abs(b - 4)],
     [6, Math.abs(r - 180) + Math.abs(g - 83) + Math.abs(b - 9)],
     [7, Math.abs(r - 124) + Math.abs(g - 58) + Math.abs(b - 237)],
-    [8, Math.abs(r - 156) + Math.abs(g - 163) + Math.abs(b - 175)],
   ]
   scores[0][1] = 9999
   return scores.reduce((best, cur) => (cur[1] < best[1] ? cur : best))[0]
