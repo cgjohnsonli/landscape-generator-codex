@@ -8,7 +8,10 @@ const TABS = [
 ]
 
 export default function SidePanel() {
-  const { activePanel, setActivePanel, raster, suggestions, coverageStats } = useStore()
+  const {
+    activePanel, setActivePanel, raster, suggestions, coverageStats, analysisType,
+    distMap, heatmapScale, heatmapGamma,
+  } = useStore()
 
   return (
     <div style={styles.panel}>
@@ -27,30 +30,66 @@ export default function SidePanel() {
       <div style={styles.body}>
         {activePanel === 'label' && <LabelPanel />}
         {activePanel === 'stats' && <StatsPanel raster={raster} />}
-        {activePanel === 'analysis' && <AnalysisPanel suggestions={suggestions} coverageStats={coverageStats} />}
+        {activePanel === 'analysis' && (
+          <AnalysisPanel
+            suggestions={suggestions}
+            coverageStats={coverageStats}
+            analysisType={analysisType}
+            distMap={distMap}
+            raster={raster}
+            heatmapScale={heatmapScale}
+            heatmapGamma={heatmapGamma}
+          />
+        )}
       </div>
     </div>
   )
 }
 
 function LabelPanel() {
+  const {
+    layerSettings,
+    toggleLayerVisibility,
+    toggleLayerLock,
+    toggleOtherLayerVisibility,
+    toggleOtherLayerLock,
+  } = useStore()
   return (
     <div>
       <div style={styles.sectionTitle}>用地类型图例</div>
-      {LABELS.map(l => (
-        <div key={l.id} style={styles.legendRow}>
-          <div style={{ ...styles.legendSwatch, background: l.color }} />
-          <span style={styles.legendText}>{l.name}</span>
-          <span style={styles.legendId}>#{l.id}</span>
-        </div>
-      ))}
+      {LABELS.map(l => {
+        const layer = layerSettings[l.id] ?? { visible: true, locked: false }
+        return (
+          <div key={l.id} style={styles.legendRow}>
+            <div style={{ ...styles.legendSwatch, background: l.color, opacity: layer.visible ? 1 : 0.35 }} />
+            <span style={{ ...styles.legendText, opacity: layer.visible ? 1 : 0.5 }}>{l.name}</span>
+            <button
+              style={{ ...styles.layerBtn, ...(layer.visible ? styles.layerBtnOn : {}) }}
+              onClick={() => toggleLayerVisibility(l.id)}
+              onContextMenu={(e) => { e.preventDefault(); toggleOtherLayerVisibility(l.id) }}
+              title="左键：切换当前图层可见性；右键：切换其他图层可见性"
+            >
+              {layer.visible ? '👁' : '🚫'}
+            </button>
+            <button
+              style={{ ...styles.layerBtn, ...(layer.locked ? styles.layerBtnOn : {}) }}
+              onClick={() => toggleLayerLock(l.id)}
+              onContextMenu={(e) => { e.preventDefault(); toggleOtherLayerLock(l.id) }}
+              title="左键：切换当前图层锁定；右键：切换其他图层锁定"
+            >
+              {layer.locked ? '🔒' : '🔓'}
+            </button>
+            <span style={styles.legendId}>#{l.id}</span>
+          </div>
+        )
+      })}
       <div style={{ marginTop: '20px' }}>
         <div style={styles.sectionTitle}>操作说明</div>
         <div style={styles.helpText}>
-          <p>🖌 <b>笔刷</b>：按住拖拽涂抹</p>
-          <p>⬡ <b>多边形</b>：点击添加顶点<br/>双击或点击起点完成</p>
-          <p>⌨ <b>Ctrl+Z</b>：撤销</p>
-          <p>⌨ <b>Ctrl+Y</b>：重做</p>
+          <p style={styles.helpItem}>🖌 <b>笔刷</b>：按住拖拽涂抹</p>
+          <p style={styles.helpItem}>⬡ <b>多边形</b>：点击添加顶点<br/>双击或点击起点完成</p>
+          <p style={styles.helpItem}>⌨ <b>Ctrl+Z</b>：撤销</p>
+          <p style={styles.helpItem}>⌨ <b>Ctrl+Y</b>：重做</p>
         </div>
       </div>
     </div>
@@ -86,16 +125,43 @@ function StatsPanel({ raster }) {
   )
 }
 
-function AnalysisPanel({ suggestions, coverageStats }) {
+
+function computeHeatmapBands(distMap, raster, analysisType, heatmapScale, heatmapGamma) {
+  if (!distMap || !raster) return null
+  const baseMaxDist = analysisType === 'road' ? 300 / raster.cellSize : 500 / raster.cellSize
+  const maxDist = Math.max(1, baseMaxDist * heatmapScale)
+
+  let green = 0
+  let yellow = 0
+  let red = 0
+  let valid = 0
+
+  for (let i = 0; i < distMap.length; i++) {
+    const d = distMap[i]
+    if (d < 0) continue
+    const normalized = Math.min(d / maxDist, 1)
+    const t = Math.pow(normalized, heatmapGamma)
+    valid++
+    if (t < 0.33) green++
+    else if (t < 0.66) yellow++
+    else red++
+  }
+
+  if (valid === 0) return null
+  const pct = (v) => ((v / valid) * 100).toFixed(1)
+  return { greenPct: pct(green), yellowPct: pct(yellow), redPct: pct(red), valid }
+}
+
+function AnalysisPanel({ suggestions, coverageStats, analysisType, distMap, raster, heatmapScale, heatmapGamma }) {
   if (!suggestions) return (
     <div style={styles.empty}>
-      点击工具栏「绿地分析」按钮<br/>运行空间分析
+点击工具栏「运行分析」按钮<br/>运行空间分析热力图
     </div>
   )
 
   return (
     <div>
-      <div style={styles.sectionTitle}>绿地服务圈覆盖</div>
+      <div style={styles.sectionTitle}>{analysisType === 'road' ? '道路可达性覆盖' : '绿地服务圈覆盖'}</div>
       {coverageStats?.map(s => (
         <div key={s.threshold} style={styles.coverRow}>
           <span style={styles.coverLabel}>{s.threshold}m 圈</span>
@@ -105,6 +171,14 @@ function AnalysisPanel({ suggestions, coverageStats }) {
           <span style={styles.coverPct}>{s.percent}%</span>
         </div>
       ))}
+
+      <HeatmapBandSummary
+        distMap={distMap}
+        raster={raster}
+        analysisType={analysisType}
+        heatmapScale={heatmapScale}
+        heatmapGamma={heatmapGamma}
+      />
 
       <div style={{ marginTop: '20px' }}>
         <div style={styles.sectionTitle}>优化建议</div>
@@ -116,6 +190,33 @@ function AnalysisPanel({ suggestions, coverageStats }) {
             <div style={styles.suggText}>{s.text}</div>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+
+function HeatmapBandSummary({ distMap, raster, analysisType, heatmapScale, heatmapGamma }) {
+  const bands = computeHeatmapBands(distMap, raster, analysisType, heatmapScale, heatmapGamma)
+  if (!bands) return null
+
+  return (
+    <div style={{ marginTop: '16px' }}>
+      <div style={styles.sectionTitle}>热力分布占比</div>
+      <div style={styles.bandRow}>
+        <span style={{ ...styles.bandDot, background: '#22c55e' }} />
+        <span style={styles.bandLabel}>绿色（高可达）</span>
+        <span style={styles.bandPct}>{bands.greenPct}%</span>
+      </div>
+      <div style={styles.bandRow}>
+        <span style={{ ...styles.bandDot, background: '#facc15' }} />
+        <span style={styles.bandLabel}>黄色（中等）</span>
+        <span style={styles.bandPct}>{bands.yellowPct}%</span>
+      </div>
+      <div style={styles.bandRow}>
+        <span style={{ ...styles.bandDot, background: '#ef4444' }} />
+        <span style={styles.bandLabel}>红色（低可达）</span>
+        <span style={styles.bandPct}>{bands.redPct}%</span>
       </div>
     </div>
   )
@@ -159,8 +260,8 @@ const styles = {
 
   helpText: {
     fontSize: '11px', color: '#475569', lineHeight: '1.8',
-    '& p': { margin: '4px 0' },
   },
+  helpItem: { margin: '4px 0' },
 
   statsMeta: { fontSize: '10px', color: '#334155', marginBottom: '12px', fontFamily: "'DM Mono', monospace" },
   statRow: { marginBottom: '12px' },
