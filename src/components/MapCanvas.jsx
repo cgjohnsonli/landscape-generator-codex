@@ -1,18 +1,15 @@
-import { useRef, useEffect, useCallback, useState } from 'react'
+import { useRef, useEffect, useCallback } from 'react'
 import { useStore } from '../store/useStore.js'
-import { LABELS, pixelToCell, paintBrush, fillPolygon } from '../core/raster.js'
+import { LABELS, paintBrush, fillPolygon } from '../core/raster.js'
 import { changedToCommand, pushHistory } from '../core/history.js'
 import { distToImageData } from '../core/analysis.js'
 
 export default function MapCanvas() {
   const canvasRef = useRef(null)
   const overlayRef = useRef(null) // 编辑交互层
-  const animRef = useRef(null)
-
   const {
     raster, sourceImage, renderTick, opacity,
-    activeTool, activeLabel, brushRadius,
-    history, triggerRender,
+    activeTool,
     distMap, showAnalysis,
   } = useStore()
 
@@ -80,11 +77,17 @@ export default function MapCanvas() {
     ]
   }, [])
 
+  const toRasterPixel = useCallback((v) => {
+    const cellSize = useStore.getState().raster?.cellSize ?? 1
+    return v * cellSize
+  }, [])
+
   // ── 笔刷绘制 ──
   const doBrush = useCallback((px, py) => {
     const { raster: r, activeLabel: lbl, brushRadius: br, history: hist } = useStore.getState()
     if (!r) return
-    const changed = paintBrush(r, px, py, br, lbl)
+    const scale = r.cellSize ?? 1
+    const changed = paintBrush(r, px * scale, py * scale, br * scale, lbl)
     if (changed.length > 0) {
       pushHistory(hist, changedToCommand(changed, '笔刷'))
       useStore.setState({ history: { ...hist }, renderTick: useStore.getState().renderTick + 1 })
@@ -138,7 +141,8 @@ export default function MapCanvas() {
         if (dist < 12) {
           // Close polygon
           const { raster: r, activeLabel: lbl, history: hist } = useStore.getState()
-          const changed = fillPolygon(r, pts, lbl)
+          const rasterPts = pts.map(({ x, y }) => ({ x: toRasterPixel(x), y: toRasterPixel(y) }))
+          const changed = fillPolygon(r, rasterPts, lbl)
           if (changed.length > 0) {
             pushHistory(hist, changedToCommand(changed, '多边形'))
             useStore.setState({ history: { ...hist }, renderTick: useStore.getState().renderTick + 1 })
@@ -193,12 +197,13 @@ export default function MapCanvas() {
   }, [])
 
   // 双击完成多边形
-  const onDoubleClick = useCallback((e) => {
+  const onDoubleClick = useCallback(() => {
     if (useStore.getState().activeTool !== 'polygon') return
     const pts = editState.current.polygonPoints
     if (pts.length >= 3) {
       const { raster: r, activeLabel: lbl, history: hist } = useStore.getState()
-      const changed = fillPolygon(r, pts, lbl)
+      const rasterPts = pts.map(({ x, y }) => ({ x: toRasterPixel(x), y: toRasterPixel(y) }))
+      const changed = fillPolygon(r, rasterPts, lbl)
       if (changed.length > 0) {
         pushHistory(hist, changedToCommand(changed, '多边形'))
         useStore.setState({ history: { ...hist }, renderTick: useStore.getState().renderTick + 1 })
@@ -206,7 +211,7 @@ export default function MapCanvas() {
       editState.current.polygonPoints = []
       overlayRef.current?.getContext('2d').clearRect(0, 0, overlayRef.current.width, overlayRef.current.height)
     }
-  }, [])
+  }, [toRasterPixel])
 
   const cursorStyle = activeTool === 'brush' ? 'none' : activeTool === 'polygon' ? 'crosshair' : 'grab'
 
