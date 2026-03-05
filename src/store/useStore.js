@@ -35,6 +35,9 @@ export const useStore = create((set, get) => ({
   coverageStats: null,
   suggestions: null,
   showAnalysis: false,
+  analysisType: 'green',
+  heatmapScale: 1,
+  heatmapGamma: 0.7,
 
   // ── 视图 ──
   activePanel: 'label',   // 'label' | 'stats' | 'analysis'
@@ -53,9 +56,11 @@ export const useStore = create((set, get) => ({
   setOpacity: (v) => set({ opacity: v }),
   setActivePanel: (p) => set({ activePanel: p }),
 
-  setDistMap: (distMap, coverageStats, suggestions) =>
-    set({ distMap, coverageStats, suggestions, showAnalysis: true }),
+  setDistMap: (distMap, coverageStats, suggestions, analysisType = 'green') =>
+    set({ distMap, coverageStats, suggestions, analysisType, showAnalysis: true }),
   setShowAnalysis: (v) => set({ showAnalysis: v }),
+  setHeatmapScale: (v) => set({ heatmapScale: v }),
+  setHeatmapGamma: (v) => set({ heatmapGamma: v }),
 
   pushEdit(changed, label) {
     const { history } = get()
