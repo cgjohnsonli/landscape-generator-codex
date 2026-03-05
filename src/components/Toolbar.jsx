@@ -1,6 +1,6 @@
 import { useStore } from '../store/useStore.js'
 import { LABELS } from '../core/raster.js'
-import { saveProject } from '../core/db.js'
+import { buildProjectSnapshot, downloadProjectFile } from '../core/projectFile.js'
 import { greenServiceDistance, roadServiceDistance, coverageStats, generateSuggestions, generateRoadSuggestions } from '../core/analysis.js'
 
 const ANALYSIS_OPTIONS = [
@@ -57,18 +57,11 @@ export default function Toolbar() {
     setProcessing(false)
   }
 
-  const saveToDb = async () => {
+  const saveProjectFile = () => {
     if (!raster) return
     try {
-      await saveProject({
-        id: 'project-1',
-        name: imageName || '未命名项目',
-        rasterData: Array.from(raster.data),
-        rasterWidth: raster.width,
-        rasterHeight: raster.height,
-        rasterCellSize: raster.cellSize,
-      })
-      alert('已保存到本地 IndexedDB')
+      const snapshot = buildProjectSnapshot(useStore.getState())
+      downloadProjectFile(snapshot)
     } catch (e) {
       alert('保存失败: ' + e.message)
     }
@@ -227,7 +220,7 @@ export default function Toolbar() {
 
       {/* 保存 */}
       <div style={styles.group}>
-        <button style={styles.actionBtn} onClick={saveToDb}>💾 保存</button>
+        <button style={styles.actionBtn} onClick={saveProjectFile}>💾 导出项目</button>
       </div>
     </div>
   )

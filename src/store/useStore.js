@@ -62,6 +62,7 @@ export const useStore = create((set, get) => ({
   setRaster: (raster) => set({
     raster,
     designabilityMap: raster ? new Uint8Array(raster.width * raster.height) : null,
+    history: createHistory(),
     renderTick: get().renderTick + 1,
   }),
   triggerRender: () => set({ renderTick: get().renderTick + 1 }),
@@ -73,6 +74,24 @@ export const useStore = create((set, get) => ({
   setEditTarget: (v) => set({ editTarget: v }),
   setDesignabilityPaintValue: (v) => set({ designabilityPaintValue: v }),
   setShowDesignability: (v) => set({ showDesignability: v }),
+  setDesignabilityMap: (map) => set({ designabilityMap: map, renderTick: get().renderTick + 1 }),
+  loadProjectData: ({ imageName, raster, designabilityMap, layerSettings }) => set({
+    imageName: imageName || '',
+    sourceImage: null,
+    imageData: null,
+    clusters: null,
+    clusterToLabel: [],
+    raster,
+    designabilityMap: designabilityMap ?? new Uint8Array(raster.width * raster.height),
+    layerSettings: layerSettings ?? createDefaultLayers(),
+    showAnalysis: false,
+    distMap: null,
+    coverageStats: null,
+    suggestions: null,
+    history: createHistory(),
+    activePanel: 'label',
+    renderTick: get().renderTick + 1,
+  }),
   setActivePanel: (p) => set({ activePanel: p }),
   toggleLayerVisibility: (id) => set((state) => ({
     layerSettings: {
@@ -119,12 +138,12 @@ export const useStore = create((set, get) => ({
   },
 
   undo() {
-    const { history, raster } = get()
-    if (undo(history, raster)) set({ history: { ...history }, renderTick: get().renderTick + 1 })
+    const { history, raster, designabilityMap } = get()
+    if (undo(history, raster, designabilityMap)) set({ history: { ...history }, renderTick: get().renderTick + 1 })
   },
   redo() {
-    const { history, raster } = get()
-    if (redo(history, raster)) set({ history: { ...history }, renderTick: get().renderTick + 1 })
+    const { history, raster, designabilityMap } = get()
+    if (redo(history, raster, designabilityMap)) set({ history: { ...history }, renderTick: get().renderTick + 1 })
   },
   canUndo: () => canUndo(get().history),
   canRedo: () => canRedo(get().history),

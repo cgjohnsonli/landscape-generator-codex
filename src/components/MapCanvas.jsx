@@ -111,13 +111,13 @@ export default function MapCanvas() {
     const changedMap = editState.current.strokeChangedMap
     if (!changedMap || changedMap.size === 0) return
     const first = changedMap.values().next().value
-    if (first?.target === 'designability') {
-      changedMap.clear()
-      return
-    }
+    const target = first?.target ?? 'landuse'
     const { history: hist } = useStore.getState()
     const changed = Array.from(changedMap.entries()).map(([idx, rec]) => ({ idx, old: rec.old, labelId: rec.labelId }))
-    pushHistory(hist, changedToCommand(changed, '笔刷'))
+    const command = target === 'designability'
+      ? changedToDesignabilityCommand(changed, '可改笔刷')
+      : changedToCommand(changed, '笔刷')
+    pushHistory(hist, command)
     useStore.setState({ history: { ...hist } })
     changedMap.clear()
   }, [])
@@ -199,12 +199,11 @@ export default function MapCanvas() {
       ? fillDesignability(dMap, r, rasterPts, paintValue, (idx) => !(layerSettings[r.data[idx]]?.locked))
       : fillPolygon(r, rasterPts, lbl, (oldLabel) => !(layerSettings[oldLabel]?.locked))
     if (changed.length > 0) {
-      if (target === 'landuse') {
-        pushHistory(hist, changedToCommand(changed, '多边形'))
-        useStore.setState({ history: { ...hist }, renderTick: useStore.getState().renderTick + 1 })
-      } else {
-        useStore.setState({ renderTick: useStore.getState().renderTick + 1 })
-      }
+      const command = target === 'designability'
+        ? changedToDesignabilityCommand(changed, '可改多边形')
+        : changedToCommand(changed, '多边形')
+      pushHistory(hist, command)
+      useStore.setState({ history: { ...hist }, renderTick: useStore.getState().renderTick + 1 })
     }
     editState.current.polygonPoints = []
     overlayRef.current?.getContext('2d').clearRect(0, 0, overlayRef.current.width, overlayRef.current.height)
@@ -360,6 +359,21 @@ export default function MapCanvas() {
       <div style={styles.zoomBadge}>缩放 {Math.round(zoom * 100)}%</div>
     </div>
   )
+}
+
+
+function changedToDesignabilityCommand(changed, label = '') {
+  return {
+    label,
+    redo(_raster, designabilityMap) {
+      if (!designabilityMap) return
+      for (const { idx, labelId } of changed) designabilityMap[idx] = labelId
+    },
+    undo(_raster, designabilityMap) {
+      if (!designabilityMap) return
+      for (const { idx, old } of changed) designabilityMap[idx] = old
+    },
+  }
 }
 
 function paintDesignability(map, raster, px, py, radiusPx, value, canEditIdx = () => true) {
