@@ -51,13 +51,33 @@ export default function ClusterMapper() {
   }, [previewRaster, sourceImage])
 
   const confirmMapping = async () => {
-    if (!previewRaster) return
-    setProcessing(true, '建立点阵数据模型...')
-    await new Promise(r => setTimeout(r, 30))
+    if (!clusters || !imageData) {
+      alert('映射数据不完整，请重新上传图像后再试。')
+      return
+    }
 
-    setClusterToLabel(mapping)
-    setRaster(previewRaster)
-    setProcessing(false)
+    setProcessing(true, '建立点阵数据模型...')
+    try {
+      await new Promise(r => setTimeout(r, 30))
+      const nextRaster = buildRasterFromClusters(
+        imageData.width,
+        imageData.height,
+        clusters.assignments,
+        mapping,
+        2,
+      )
+
+      if (!nextRaster?.width || !nextRaster?.height || !nextRaster?.data?.length) {
+        throw new Error('点阵数据为空')
+      }
+
+      setClusterToLabel(mapping)
+      setRaster(nextRaster)
+    } catch (e) {
+      alert(`建立底图失败：${e.message || '未知错误'}`)
+    } finally {
+      setProcessing(false)
+    }
   }
 
   if (!clusters) return null
