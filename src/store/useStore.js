@@ -4,6 +4,11 @@
  */
 import { create } from 'zustand'
 import { createHistory, pushHistory, undo, redo, canUndo, canRedo, changedToCommand } from '../core/history.js'
+import { LABELS } from '../core/raster.js'
+
+const createDefaultLayers = () => Object.fromEntries(
+  LABELS.map((l) => [l.id, { visible: true, locked: false }])
+)
 
 export const useStore = create((set, get) => ({
   // ── 图像 ──
@@ -19,6 +24,7 @@ export const useStore = create((set, get) => ({
 
   // ── 点阵 ──
   raster: null,            // RasterGrid
+  designabilityMap: null,  // Uint8Array: 0=不可改,1=可改
   renderTick: 0,           // 用于触发 canvas 重绘
 
   // ── 编辑工具 ──
@@ -26,6 +32,9 @@ export const useStore = create((set, get) => ({
   activeLabel: 3,          // 当前绘制标签（默认绿地）
   brushRadius: 20,         // 像素半径
   opacity: 0.85,           // 叠加层透明度
+  editTarget: 'landuse',   // 'landuse' | 'designability'
+  designabilityPaintValue: 1,
+  showDesignability: false,
 
   // ── 历史 ──
   history: createHistory(),
@@ -35,6 +44,12 @@ export const useStore = create((set, get) => ({
   coverageStats: null,
   suggestions: null,
   showAnalysis: false,
+  analysisType: 'green',
+  heatmapScale: 0.4,
+  heatmapGamma: 0.4,
+
+  // ── 图层 ──
+  layerSettings: createDefaultLayers(),
 
   // ── 视图 ──
   activePanel: 'label',   // 'label' | 'stats' | 'analysis'
@@ -44,18 +59,58 @@ export const useStore = create((set, get) => ({
   setClusters: (clusters) => set({ clusters }),
   setClusterToLabel: (map) => set({ clusterToLabel: map }),
   setProcessing: (isProcessing, msg = '') => set({ isProcessing, processingMsg: msg }),
-  setRaster: (raster) => set({ raster, renderTick: get().renderTick + 1 }),
+  setRaster: (raster) => set({
+    raster,
+    designabilityMap: raster ? new Uint8Array(raster.width * raster.height) : null,
+    renderTick: get().renderTick + 1,
+  }),
   triggerRender: () => set({ renderTick: get().renderTick + 1 }),
 
   setActiveTool: (t) => set({ activeTool: t }),
   setActiveLabel: (id) => set({ activeLabel: id }),
   setBrushRadius: (r) => set({ brushRadius: r }),
   setOpacity: (v) => set({ opacity: v }),
+  setEditTarget: (v) => set({ editTarget: v }),
+  setDesignabilityPaintValue: (v) => set({ designabilityPaintValue: v }),
+  setShowDesignability: (v) => set({ showDesignability: v }),
   setActivePanel: (p) => set({ activePanel: p }),
+  toggleLayerVisibility: (id) => set((state) => ({
+    layerSettings: {
+      ...state.layerSettings,
+      [id]: { ...state.layerSettings[id], visible: !state.layerSettings[id]?.visible },
+    },
+  })),
+  toggleLayerLock: (id) => set((state) => ({
+    layerSettings: {
+      ...state.layerSettings,
+      [id]: { ...state.layerSettings[id], locked: !state.layerSettings[id]?.locked },
+    },
+  })),
 
-  setDistMap: (distMap, coverageStats, suggestions) =>
-    set({ distMap, coverageStats, suggestions, showAnalysis: true }),
+  toggleOtherLayerVisibility: (id) => set((state) => {
+    const next = { ...state.layerSettings }
+    for (const key of Object.keys(next)) {
+      const lid = Number(key)
+      if (lid === id) continue
+      next[lid] = { ...next[lid], visible: !next[lid]?.visible }
+    }
+    return { layerSettings: next }
+  }),
+  toggleOtherLayerLock: (id) => set((state) => {
+    const next = { ...state.layerSettings }
+    for (const key of Object.keys(next)) {
+      const lid = Number(key)
+      if (lid === id) continue
+      next[lid] = { ...next[lid], locked: !next[lid]?.locked }
+    }
+    return { layerSettings: next }
+  }),
+
+  setDistMap: (distMap, coverageStats, suggestions, analysisType = 'green') =>
+    set({ distMap, coverageStats, suggestions, analysisType, showAnalysis: true }),
   setShowAnalysis: (v) => set({ showAnalysis: v }),
+  setHeatmapScale: (v) => set({ heatmapScale: v }),
+  setHeatmapGamma: (v) => set({ heatmapGamma: v }),
 
   pushEdit(changed, label) {
     const { history } = get()
