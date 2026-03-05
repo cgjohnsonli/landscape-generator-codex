@@ -67,16 +67,13 @@ export default function MapCanvas() {
     }
 
     if (showDesignability && designabilityMap) {
-      const mask = new ImageData(raster.width, raster.height)
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.4)'
       for (let i = 0; i < designabilityMap.length; i++) {
         if (designabilityMap[i] !== 1) continue
-        const base = i * 4
-        mask.data[base] = 239
-        mask.data[base + 1] = 68
-        mask.data[base + 2] = 68
-        mask.data[base + 3] = 110
+        const x = i % raster.width
+        const y = Math.floor(i / raster.width)
+        ctx.fillRect(x, y, 1, 1)
       }
-      ctx.putImageData(mask, 0, 0)
     }
   }, [raster, renderTick, opacity, showAnalysis, distMap, analysisType, heatmapScale, heatmapGamma, layerSettings, showDesignability, designabilityMap])
 
