@@ -6,6 +6,7 @@ import SidePanel from './components/SidePanel.jsx'
 import UploadOverlay from './components/UploadOverlay.jsx'
 import ProcessingOverlay from './components/ProcessingOverlay.jsx'
 import ClusterMapper from './components/ClusterMapper.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 
 export default function App() {
   const { raster, clusters, isProcessing, undo, redo } = useStore()
@@ -23,7 +24,8 @@ export default function App() {
   const showClusterMapper = clusters && !raster
 
   return (
-    <div style={styles.root}>
+    <ErrorBoundary>
+      <div style={styles.root}>
       {/* Header */}
       <header style={styles.header}>
         <div style={styles.logo}>
@@ -54,7 +56,8 @@ export default function App() {
       {/* Overlays */}
       {isProcessing && <ProcessingOverlay />}
       {showClusterMapper && <ClusterMapper />}
-    </div>
+      </div>
+    </ErrorBoundary>
   )
 }
 
