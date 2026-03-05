@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState } from 'react'
+import { useRef, useEffect, useCallback } from 'react'
 import { useStore } from '../store/useStore.js'
 import { LABELS, paintBrush, fillPolygon } from '../core/raster.js'
 import { changedToCommand, pushHistory } from '../core/history.js'
