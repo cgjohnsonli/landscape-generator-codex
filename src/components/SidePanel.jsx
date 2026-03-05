@@ -47,10 +47,10 @@ function LabelPanel() {
       <div style={{ marginTop: '20px' }}>
         <div style={styles.sectionTitle}>操作说明</div>
         <div style={styles.helpText}>
-          <p>🖌 <b>笔刷</b>：按住拖拽涂抹</p>
-          <p>⬡ <b>多边形</b>：点击添加顶点<br/>双击或点击起点完成</p>
-          <p>⌨ <b>Ctrl+Z</b>：撤销</p>
-          <p>⌨ <b>Ctrl+Y</b>：重做</p>
+          <p style={styles.helpItem}>🖌 <b>笔刷</b>：按住拖拽涂抹</p>
+          <p style={styles.helpItem}>⬡ <b>多边形</b>：点击添加顶点<br/>双击或点击起点完成</p>
+          <p style={styles.helpItem}>⌨ <b>Ctrl+Z</b>：撤销</p>
+          <p style={styles.helpItem}>⌨ <b>Ctrl+Y</b>：重做</p>
         </div>
       </div>
     </div>
@@ -159,8 +159,8 @@ const styles = {
 
   helpText: {
     fontSize: '11px', color: '#475569', lineHeight: '1.8',
-    '& p': { margin: '4px 0' },
   },
+  helpItem: { margin: '4px 0' },
 
   statsMeta: { fontSize: '10px', color: '#334155', marginBottom: '12px', fontFamily: "'DM Mono', monospace" },
   statRow: { marginBottom: '12px' },
