@@ -482,6 +482,10 @@ function applyQuickDesign(state, px, py, designId, layerSettings) {
   const minCol = region.reduce((m, idx) => Math.min(m, idx % raster.width), Infinity)
   const minRow = region.reduce((m, idx) => Math.min(m, Math.floor(idx / raster.width)), Infinity)
 
+  const pocketParkGreenSet = designId === 'pocket_park'
+    ? computePocketParkGreenSet(region, state.distMap)
+    : null
+
   for (const idx of region) {
     const old = raster.data[idx]
     if (layerSettings[old]?.locked) continue
@@ -489,7 +493,7 @@ function applyQuickDesign(state, px, py, designId, layerSettings) {
     const row0 = Math.floor(idx / raster.width)
     const relX = col0 - minCol
     const relY = row0 - minRow
-    const labelId = pickQuickDesignLabel(designId, relX, relY)
+    const labelId = pickQuickDesignLabel(designId, relX, relY, idx, pocketParkGreenSet)
     if (labelId === old) continue
     raster.data[idx] = labelId
     changed.push({ idx, old, labelId })
@@ -524,10 +528,11 @@ function floodDesignableRegion(width, height, map, startIdx) {
   return out
 }
 
-function pickQuickDesignLabel(designId, x, y) {
+function pickQuickDesignLabel(designId, x, y, idx, pocketParkGreenSet) {
   // 3=绿地/植被, 8=硬质铺装
   if (designId === 'pocket_park') {
-    return (x % 6 === 0 || y % 6 === 0) ? 8 : 3
+    if (pocketParkGreenSet?.has(idx)) return 3
+    return 8
   }
   if (designId === 'civic_plaza') {
     return ((x + y) % 7 <= 1) ? 3 : 8
@@ -536,6 +541,22 @@ function pickQuickDesignLabel(designId, x, y) {
     return ((x % 10 === 0) && (y % 3 === 0)) ? 8 : 3
   }
   return 3
+}
+
+function computePocketParkGreenSet(region, distMap) {
+  if (!Array.isArray(region) || region.length === 0) return new Set()
+  if (!distMap) return new Set(region.filter((_, i) => i % 3 === 0))
+
+  const sortable = region.map((idx) => ({ idx, d: distMap[idx] ?? -1 }))
+  sortable.sort((a, b) => b.d - a.d)
+
+  const pickCount = Math.max(1, Math.ceil(sortable.length * 0.3))
+  const set = new Set()
+  for (let i = 0; i < pickCount; i++) {
+    const { idx } = sortable[i]
+    set.add(idx)
+  }
+  return set
 }
 
 const styles = {
