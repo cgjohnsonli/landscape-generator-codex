@@ -135,8 +135,7 @@ export default function Toolbar() {
 
 function LabelQuickPicker() {
   const { activeLabel, setActiveLabel } = useStore()
-  // 只展示前6个常用标签
-  const visible = LABELS.slice(0, 8)
+  const visible = LABELS
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
       {visible.map(l => (
