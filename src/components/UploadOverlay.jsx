@@ -1,10 +1,12 @@
 import { useRef, useCallback } from 'react'
 import { useStore } from '../store/useStore.js'
 import { kmeansImage } from '../core/kmeans.js'
+import { readProjectFile } from '../core/projectFile.js'
 
 export default function UploadOverlay() {
-  const { setSourceImage, setClusters, setProcessing, setClusterToLabel } = useStore()
+  const { setSourceImage, setClusters, setProcessing, setClusterToLabel, loadProjectData } = useStore()
   const inputRef = useRef()
+  const projectInputRef = useRef()
   const dragRef = useRef(false)
 
   const processFile = useCallback(async (file) => {
@@ -33,6 +35,20 @@ export default function UploadOverlay() {
     setClusters(clusters)
     setProcessing(false)
   }, [])
+
+
+  const importProjectFile = useCallback(async (file) => {
+    if (!file) return
+    try {
+      setProcessing(true, '读取项目文件...')
+      const project = await readProjectFile(file)
+      loadProjectData(project)
+    } catch (e) {
+      alert('导入失败: ' + e.message)
+    } finally {
+      setProcessing(false)
+    }
+  }, [loadProjectData, setProcessing])
 
   const onDrop = useCallback((e) => {
     e.preventDefault()
@@ -65,7 +81,10 @@ export default function UploadOverlay() {
           系统将自动进行 K-means 聚类分析
         </p>
         <button style={styles.btn} onClick={() => inputRef.current?.click()}>
-          选择文件
+          导入分色图
+        </button>
+        <button style={{ ...styles.btn, ...styles.secondaryBtn }} onClick={() => projectInputRef.current?.click()}>
+          导入项目文件
         </button>
         <input
           ref={inputRef}
@@ -74,7 +93,14 @@ export default function UploadOverlay() {
           style={{ display: 'none' }}
           onChange={(e) => processFile(e.target.files?.[0])}
         />
-        <p style={styles.hint}>推荐分辨率：500×500 ~ 4000×4000 px</p>
+        <input
+          ref={projectInputRef}
+          type="file"
+          accept="application/json,.json,.greenlens"
+          style={{ display: 'none' }}
+          onChange={(e) => importProjectFile(e.target.files?.[0])}
+        />
+        <p style={styles.hint}>推荐分辨率：500×500 ~ 4000×4000 px；也支持 *.greenlens.json 项目文件</p>
       </div>
     </div>
   )
@@ -125,6 +151,7 @@ const styles = {
     borderRadius: '4px',
     transition: 'all 0.15s',
   },
+  secondaryBtn: { borderColor: '#1e40af', color: '#93c5fd' },
   hint: {
     margin: 0,
     fontSize: '11px',
