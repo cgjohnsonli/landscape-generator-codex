@@ -14,12 +14,15 @@ export default function Toolbar() {
     activeTool, setActiveTool,
     brushRadius, setBrushRadius,
     opacity, setOpacity,
-    undo, redo,
+    undo, redo, canUndo, canRedo,
     raster,
     setDistMap, setProcessing,
     showAnalysis, setShowAnalysis,
     imageName,
   } = useStore()
+
+  const canUndoNow = canUndo()
+  const canRedoNow = canRedo()
 
   const runAnalysis = async () => {
     if (!raster) return
@@ -102,8 +105,8 @@ export default function Toolbar() {
 
       {/* 撤销/重做 */}
       <div style={styles.group}>
-        <button style={styles.actionBtn} onClick={undo} title="撤销 Ctrl+Z">↩ 撤销</button>
-        <button style={styles.actionBtn} onClick={redo} title="重做 Ctrl+Y">↪ 重做</button>
+        <button style={{ ...styles.actionBtn, ...(canUndoNow ? null : styles.actionBtnDisabled) }} onClick={undo} title="撤销 Ctrl+Z" disabled={!canUndoNow}>↩ 撤销</button>
+        <button style={{ ...styles.actionBtn, ...(canRedoNow ? null : styles.actionBtnDisabled) }} onClick={redo} title="重做 Ctrl+Y" disabled={!canRedoNow}>↪ 重做</button>
       </div>
 
       <div style={styles.divider} />
@@ -131,9 +134,8 @@ export default function Toolbar() {
 }
 
 function LabelQuickPicker() {
-  const { activeLabel, setActiveLabel, setActivePanel } = useStore()
-  // 只展示前6个常用标签
-  const visible = LABELS.slice(0, 8)
+  const { activeLabel, setActiveLabel } = useStore()
+  const visible = LABELS
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
       {visible.map(l => (
@@ -205,6 +207,10 @@ const styles = {
     borderRadius: '3px',
     transition: 'all 0.1s',
     textAlign: 'left',
+  },
+  actionBtnDisabled: {
+    opacity: 0.4,
+    cursor: 'not-allowed',
   },
   analysisBtn: {
     padding: '7px 8px',

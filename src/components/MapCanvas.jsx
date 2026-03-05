@@ -1,18 +1,15 @@
 import { useRef, useEffect, useCallback, useState } from 'react'
 import { useStore } from '../store/useStore.js'
-import { LABELS, pixelToCell, paintBrush, fillPolygon } from '../core/raster.js'
+import { LABELS, paintBrush, fillPolygon } from '../core/raster.js'
 import { changedToCommand, pushHistory } from '../core/history.js'
 import { distToImageData } from '../core/analysis.js'
 
 export default function MapCanvas() {
   const canvasRef = useRef(null)
   const overlayRef = useRef(null) // 编辑交互层
-  const animRef = useRef(null)
-
   const {
     raster, sourceImage, renderTick, opacity,
-    activeTool, activeLabel, brushRadius,
-    history, triggerRender,
+    activeTool,
     distMap, showAnalysis,
   } = useStore()
 
@@ -22,6 +19,9 @@ export default function MapCanvas() {
     polygonPoints: [],      // 多边形顶点 [{x,y}]
     lastPx: null, lastPy: null,
   })
+
+
+  const [zoom, setZoom] = useState(1)
 
   // ── 主渲染 ──
   useEffect(() => {
@@ -67,6 +67,10 @@ export default function MapCanvas() {
     o.height = c.height
   }, [raster])
 
+  useEffect(() => {
+    setZoom(1)
+  }, [raster])
+
   // ── 坐标转换（canvas 内坐标） ──
   const getCanvasPos = useCallback((e) => {
     const canvas = canvasRef.current
@@ -80,11 +84,17 @@ export default function MapCanvas() {
     ]
   }, [])
 
+  const toRasterPixel = useCallback((v) => {
+    const cellSize = useStore.getState().raster?.cellSize ?? 1
+    return v * cellSize
+  }, [])
+
   // ── 笔刷绘制 ──
   const doBrush = useCallback((px, py) => {
     const { raster: r, activeLabel: lbl, brushRadius: br, history: hist } = useStore.getState()
     if (!r) return
-    const changed = paintBrush(r, px, py, br, lbl)
+    const scale = r.cellSize ?? 1
+    const changed = paintBrush(r, px * scale, py * scale, br * scale, lbl)
     if (changed.length > 0) {
       pushHistory(hist, changedToCommand(changed, '笔刷'))
       useStore.setState({ history: { ...hist }, renderTick: useStore.getState().renderTick + 1 })
@@ -138,7 +148,8 @@ export default function MapCanvas() {
         if (dist < 12) {
           // Close polygon
           const { raster: r, activeLabel: lbl, history: hist } = useStore.getState()
-          const changed = fillPolygon(r, pts, lbl)
+          const rasterPts = pts.map(({ x, y }) => ({ x: toRasterPixel(x), y: toRasterPixel(y) }))
+          const changed = fillPolygon(r, rasterPts, lbl)
           if (changed.length > 0) {
             pushHistory(hist, changedToCommand(changed, '多边形'))
             useStore.setState({ history: { ...hist }, renderTick: useStore.getState().renderTick + 1 })
@@ -151,7 +162,7 @@ export default function MapCanvas() {
       pts.push({ x: px, y: py })
       drawPolygonPreview(px, py)
     }
-  }, [doBrush, getCanvasPos, drawPolygonPreview])
+  }, [doBrush, getCanvasPos, drawPolygonPreview, toRasterPixel])
 
   const onMouseMove = useCallback((e) => {
     const [px, py] = getCanvasPos(e)
@@ -193,12 +204,13 @@ export default function MapCanvas() {
   }, [])
 
   // 双击完成多边形
-  const onDoubleClick = useCallback((e) => {
+  const onDoubleClick = useCallback(() => {
     if (useStore.getState().activeTool !== 'polygon') return
     const pts = editState.current.polygonPoints
     if (pts.length >= 3) {
       const { raster: r, activeLabel: lbl, history: hist } = useStore.getState()
-      const changed = fillPolygon(r, pts, lbl)
+      const rasterPts = pts.map(({ x, y }) => ({ x: toRasterPixel(x), y: toRasterPixel(y) }))
+      const changed = fillPolygon(r, rasterPts, lbl)
       if (changed.length > 0) {
         pushHistory(hist, changedToCommand(changed, '多边形'))
         useStore.setState({ history: { ...hist }, renderTick: useStore.getState().renderTick + 1 })
@@ -206,22 +218,38 @@ export default function MapCanvas() {
       editState.current.polygonPoints = []
       overlayRef.current?.getContext('2d').clearRect(0, 0, overlayRef.current.width, overlayRef.current.height)
     }
+  }, [toRasterPixel])
+
+  const onWheelZoom = useCallback((e) => {
+    e.preventDefault()
+    const direction = e.deltaY < 0 ? 1 : -1
+    const step = direction > 0 ? 1.1 : 0.9
+    setZoom((prev) => {
+      const next = prev * step
+      return Math.min(8, Math.max(0.5, next))
+    })
   }, [])
 
   const cursorStyle = activeTool === 'brush' ? 'none' : activeTool === 'polygon' ? 'crosshair' : 'grab'
 
   return (
     <div style={styles.root}>
-      <canvas ref={canvasRef} style={styles.canvas} />
-      <canvas
-        ref={overlayRef}
-        style={{ ...styles.canvas, ...styles.overlay, cursor: cursorStyle }}
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp}
-        onMouseLeave={onMouseLeave}
-        onDoubleClick={onDoubleClick}
-      />
+      <div
+        style={{ ...styles.stage, width: raster?.width ?? 0, height: raster?.height ?? 0, transform: `scale(${zoom})` }}
+        onWheel={onWheelZoom}
+      >
+        <canvas ref={canvasRef} style={styles.canvas} />
+        <canvas
+          ref={overlayRef}
+          style={{ ...styles.canvas, ...styles.overlay, cursor: cursorStyle }}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={onMouseUp}
+          onMouseLeave={onMouseLeave}
+          onDoubleClick={onDoubleClick}
+        />
+      </div>
+      <div style={styles.zoomBadge}>缩放 {Math.round(zoom * 100)}%</div>
     </div>
   )
 }
@@ -233,6 +261,10 @@ const styles = {
     overflow: 'auto',
     background: '#080d12',
   },
+  stage: {
+    position: 'relative',
+    transformOrigin: 'center center',
+  },
   canvas: {
     position: 'absolute',
     maxWidth: '100%',
@@ -243,5 +275,17 @@ const styles = {
   overlay: {
     pointerEvents: 'all',
     background: 'transparent',
+  },
+  zoomBadge: {
+    position: 'absolute',
+    right: '12px',
+    bottom: '12px',
+    padding: '4px 8px',
+    fontSize: '11px',
+    borderRadius: '4px',
+    border: '1px solid #334155',
+    color: '#cbd5e1',
+    background: '#0d1117cc',
+    pointerEvents: 'none',
   },
 }
