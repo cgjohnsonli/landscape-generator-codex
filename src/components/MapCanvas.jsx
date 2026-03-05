@@ -325,6 +325,29 @@ export default function MapCanvas() {
     })
   }, [])
 
+  const onDesignDragOver = useCallback((e) => {
+    const st = useStore.getState()
+    const hasPayload = e.dataTransfer.types.includes('application/x-greenlens-design')
+    if (!st.showDesignability || !hasPayload) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }, [])
+
+  const onDesignDrop = useCallback((e) => {
+    const st = useStore.getState()
+    if (!st.showDesignability) return
+    const designId = e.dataTransfer.getData('application/x-greenlens-design')
+    if (!designId) return
+    e.preventDefault()
+
+    const [px, py] = getCanvasPos(e)
+    const applied = applyQuickDesign(st, px, py, designId, layerSettings)
+    if (!applied) return
+    const { history: hist } = useStore.getState()
+    pushHistory(hist, changedToCommand(applied, `快速设计:${designId}`))
+    useStore.setState({ history: { ...hist }, renderTick: useStore.getState().renderTick + 1 })
+  }, [getCanvasPos, layerSettings])
+
   const cursorStyle = editState.current.isPanning
     ? 'grabbing'
     : activeTool === 'brush'
@@ -354,6 +377,8 @@ export default function MapCanvas() {
           onMouseLeave={onMouseLeave}
           onDoubleClick={onDoubleClick}
           onContextMenu={(e) => e.preventDefault()}
+          onDragOver={onDesignDragOver}
+          onDrop={onDesignDrop}
         />
       </div>
       <div style={styles.zoomBadge}>缩放 {Math.round(zoom * 100)}%</div>
@@ -438,6 +463,79 @@ function pointInPolygon(x, y, polygon) {
     if (intersect) inside = !inside
   }
   return inside
+}
+
+
+function applyQuickDesign(state, px, py, designId, layerSettings) {
+  const { raster, designabilityMap } = state
+  if (!raster || !designabilityMap) return null
+  const col = Math.floor(px)
+  const row = Math.floor(py)
+  if (col < 0 || row < 0 || col >= raster.width || row >= raster.height) return null
+  const startIdx = row * raster.width + col
+  if (designabilityMap[startIdx] !== 1) return null
+
+  const region = floodDesignableRegion(raster.width, raster.height, designabilityMap, startIdx)
+  if (region.length === 0) return null
+
+  const changed = []
+  const minCol = region.reduce((m, idx) => Math.min(m, idx % raster.width), Infinity)
+  const minRow = region.reduce((m, idx) => Math.min(m, Math.floor(idx / raster.width)), Infinity)
+
+  for (const idx of region) {
+    const old = raster.data[idx]
+    if (layerSettings[old]?.locked) continue
+    const col0 = idx % raster.width
+    const row0 = Math.floor(idx / raster.width)
+    const relX = col0 - minCol
+    const relY = row0 - minRow
+    const labelId = pickQuickDesignLabel(designId, relX, relY)
+    if (labelId === old) continue
+    raster.data[idx] = labelId
+    changed.push({ idx, old, labelId })
+  }
+
+  return changed
+}
+
+function floodDesignableRegion(width, height, map, startIdx) {
+  const out = []
+  const seen = new Uint8Array(width * height)
+  const q = [startIdx]
+  seen[startIdx] = 1
+
+  while (q.length) {
+    const idx = q.pop()
+    if (map[idx] !== 1) continue
+    out.push(idx)
+    const c = idx % width
+    const r = Math.floor(idx / width)
+    const nbs = []
+    if (c > 0) nbs.push(idx - 1)
+    if (c < width - 1) nbs.push(idx + 1)
+    if (r > 0) nbs.push(idx - width)
+    if (r < height - 1) nbs.push(idx + width)
+    for (const n of nbs) {
+      if (seen[n]) continue
+      seen[n] = 1
+      q.push(n)
+    }
+  }
+  return out
+}
+
+function pickQuickDesignLabel(designId, x, y) {
+  // 3=绿地/植被, 8=硬质铺装
+  if (designId === 'pocket_park') {
+    return (x % 6 === 0 || y % 6 === 0) ? 8 : 3
+  }
+  if (designId === 'civic_plaza') {
+    return ((x + y) % 7 <= 1) ? 3 : 8
+  }
+  if (designId === 'urban_forest') {
+    return ((x % 10 === 0) && (y % 3 === 0)) ? 8 : 3
+  }
+  return 3
 }
 
 const styles = {

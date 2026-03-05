@@ -14,6 +14,12 @@ const TOOLS = [
   { id: 'pan',     icon: '✥', label: '平移' },
 ]
 
+const QUICK_DESIGNS = [
+  { id: 'pocket_park', name: '口袋公园' },
+  { id: 'civic_plaza', name: '市民广场' },
+  { id: 'urban_forest', name: '城市森林' },
+]
+
 export default function Toolbar() {
   const {
     activeTool, setActiveTool,
@@ -21,6 +27,7 @@ export default function Toolbar() {
     opacity, setOpacity,
     editTarget, setEditTarget,
     designabilityPaintValue, setDesignabilityPaintValue,
+    showDesignability,
     undo, redo, canUndo, canRedo,
     raster,
     setDistMap, setProcessing,
@@ -216,7 +223,31 @@ export default function Toolbar() {
         )}
       </div>
 
+
       <div style={styles.divider} />
+
+      {/* 快速设计 */}
+      <div style={styles.group}>
+        <div style={styles.groupLabel}>快速设计</div>
+        {!showDesignability && <div style={styles.hintText}>先在右侧开启「显示可改遮罩」</div>}
+        <div style={styles.quickList}>
+          {QUICK_DESIGNS.map((d) => (
+            <div
+              key={d.id}
+              draggable={showDesignability}
+              onDragStart={(e) => {
+                if (!showDesignability) return
+                e.dataTransfer.setData('application/x-greenlens-design', d.id)
+                e.dataTransfer.effectAllowed = 'copy'
+              }}
+              style={{ ...styles.quickItem, ...(showDesignability ? null : styles.quickItemDisabled) }}
+              title={showDesignability ? '拖拽到可改区域应用设计' : '请先显示可改遮罩'}
+            >
+              ✦ {d.name}
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* 保存 */}
       <div style={styles.group}>
@@ -358,4 +389,20 @@ const styles = {
   },
   labelDot: { width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0 },
   labelName: { fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+
+  hintText: { fontSize: '10px', color: '#64748b', lineHeight: 1.5 },
+  quickList: { display: 'flex', flexDirection: 'column', gap: '5px' },
+  quickItem: {
+    padding: '6px 8px',
+    border: '1px dashed #334155',
+    color: '#cbd5e1',
+    fontSize: '10px',
+    borderRadius: '4px',
+    cursor: 'grab',
+    userSelect: 'none',
+  },
+  quickItemDisabled: {
+    opacity: 0.45,
+    cursor: 'not-allowed',
+  },
 }
