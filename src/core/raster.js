@@ -9,12 +9,13 @@
 export const LABELS = [
   { id: 0, name: '未分类',     color: '#64748b', rgb: [100, 116, 139] },
   { id: 1, name: '建筑',       color: '#d97706', rgb: [217, 119,   6] },
-  { id: 2, name: '道路/硬质',  color: '#9ca3af', rgb: [156, 163, 175] },
+  { id: 2, name: '道路',       color: '#6b7280', rgb: [107, 114, 128] },
   { id: 3, name: '绿地/植被',  color: '#16a34a', rgb: [ 22, 163,  74] },
   { id: 4, name: '水体',       color: '#2563eb', rgb: [ 37,  99, 235] },
   { id: 5, name: '农田',       color: '#ca8a04', rgb: [202, 138,   4] },
   { id: 6, name: '裸地',       color: '#b45309', rgb: [180,  83,   9] },
   { id: 7, name: '其他用地',   color: '#7c3aed', rgb: [124,  58, 237] },
+  { id: 8, name: '硬质铺装',   color: '#9ca3af', rgb: [156, 163, 175] },
 ]
 
 export const LABEL_MAP = Object.fromEntries(LABELS.map(l => [l.id, l]))
@@ -98,7 +99,7 @@ export function computeStats(raster) {
  * 多边形内的格元批量更新
  * polygon: [{x, y}, ...] 像素坐标（相对于 canvas）
  */
-export function fillPolygon(raster, polygonPx, labelId) {
+export function fillPolygon(raster, polygonPx, labelId, canEditCell = () => true) {
   if (polygonPx.length < 3) return []
   const changed = []
 
@@ -117,7 +118,7 @@ export function fillPolygon(raster, polygonPx, labelId) {
       if (pointInPolygon(cx, cy, polygonPx)) {
         const idx = r * raster.width + c
         const old = raster.data[idx]
-        if (old !== labelId) {
+        if (old !== labelId && canEditCell(old, idx)) {
           changed.push({ idx, old, labelId })
           raster.data[idx] = labelId
         }
@@ -142,7 +143,7 @@ function pointInPolygon(x, y, polygon) {
 /**
  * 笔刷涂抹：以 (px, py) 为中心，radius 为半径的圆形区域
  */
-export function paintBrush(raster, px, py, radiusPx, labelId) {
+export function paintBrush(raster, px, py, radiusPx, labelId, canEditCell = () => true) {
   const changed = []
   const r2 = radiusPx * radiusPx
   const cs = raster.cellSize
@@ -160,7 +161,7 @@ export function paintBrush(raster, px, py, radiusPx, labelId) {
       if (dx * dx + dy * dy <= r2) {
         const idx = row * raster.width + col
         const old = raster.data[idx]
-        if (old !== labelId) {
+        if (old !== labelId && canEditCell(old, idx)) {
           changed.push({ idx, old, labelId })
           raster.data[idx] = labelId
         }
