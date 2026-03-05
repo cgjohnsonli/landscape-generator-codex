@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import { useStore } from '../store/useStore.js'
 import { LABELS, buildRasterFromClusters } from '../core/raster.js'
 import { rgbToHex } from '../core/kmeans.js'
@@ -7,7 +7,7 @@ export default function ClusterMapper() {
   const { clusters, imageData, sourceImage, setRaster, setClusterToLabel, setProcessing } = useStore()
   const previewCanvasRef = useRef(null)
 
-  const [mapping, setMapping] = useState(() => {
+  const [mapping, setMapping] = React.useState(() => {
     // 初始化时用颜色相似度做默认猜测
     if (!clusters) return []
     return clusters.centers.map(center => guessLabel(center))

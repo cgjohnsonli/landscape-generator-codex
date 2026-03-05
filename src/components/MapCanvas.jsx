@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react'
+import React, { useRef, useEffect, useCallback } from 'react'
 import { useStore } from '../store/useStore.js'
 import { LABELS, paintBrush, fillPolygon } from '../core/raster.js'
 import { changedToCommand, pushHistory } from '../core/history.js'
@@ -21,7 +21,7 @@ export default function MapCanvas() {
   })
 
 
-  const [zoom, setZoom] = useState(1)
+  const [zoom, setZoom] = React.useState(1)
 
   // ── 主渲染 ──
   useEffect(() => {
