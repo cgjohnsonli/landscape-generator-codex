@@ -34,7 +34,13 @@ export default function SidePanel() {
 }
 
 function LabelPanel() {
-  const { layerSettings, toggleLayerVisibility, toggleLayerLock } = useStore()
+  const {
+    layerSettings,
+    toggleLayerVisibility,
+    toggleLayerLock,
+    toggleOtherLayerVisibility,
+    toggleOtherLayerLock,
+  } = useStore()
   return (
     <div>
       <div style={styles.sectionTitle}>用地类型图例</div>
@@ -44,8 +50,22 @@ function LabelPanel() {
           <div key={l.id} style={styles.legendRow}>
             <div style={{ ...styles.legendSwatch, background: l.color, opacity: layer.visible ? 1 : 0.35 }} />
             <span style={{ ...styles.legendText, opacity: layer.visible ? 1 : 0.5 }}>{l.name}</span>
-            <button style={{ ...styles.layerBtn, ...(layer.visible ? styles.layerBtnOn : {}) }} onClick={() => toggleLayerVisibility(l.id)} title="显示/隐藏">👁</button>
-            <button style={{ ...styles.layerBtn, ...(layer.locked ? styles.layerBtnOn : {}) }} onClick={() => toggleLayerLock(l.id)} title="锁定/解锁">🔒</button>
+            <button
+              style={{ ...styles.layerBtn, ...(layer.visible ? styles.layerBtnOn : {}) }}
+              onClick={() => toggleLayerVisibility(l.id)}
+              onContextMenu={(e) => { e.preventDefault(); toggleOtherLayerVisibility(l.id) }}
+              title="左键：切换当前图层可见性；右键：切换其他图层可见性"
+            >
+              {layer.visible ? '👁' : '🚫'}
+            </button>
+            <button
+              style={{ ...styles.layerBtn, ...(layer.locked ? styles.layerBtnOn : {}) }}
+              onClick={() => toggleLayerLock(l.id)}
+              onContextMenu={(e) => { e.preventDefault(); toggleOtherLayerLock(l.id) }}
+              title="左键：切换当前图层锁定；右键：切换其他图层锁定"
+            >
+              {layer.locked ? '🔒' : '🔓'}
+            </button>
             <span style={styles.legendId}>#{l.id}</span>
           </div>
         )

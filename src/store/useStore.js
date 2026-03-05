@@ -76,6 +76,25 @@ export const useStore = create((set, get) => ({
     },
   })),
 
+  toggleOtherLayerVisibility: (id) => set((state) => {
+    const next = { ...state.layerSettings }
+    for (const key of Object.keys(next)) {
+      const lid = Number(key)
+      if (lid === id) continue
+      next[lid] = { ...next[lid], visible: !next[lid]?.visible }
+    }
+    return { layerSettings: next }
+  }),
+  toggleOtherLayerLock: (id) => set((state) => {
+    const next = { ...state.layerSettings }
+    for (const key of Object.keys(next)) {
+      const lid = Number(key)
+      if (lid === id) continue
+      next[lid] = { ...next[lid], locked: !next[lid]?.locked }
+    }
+    return { layerSettings: next }
+  }),
+
   setDistMap: (distMap, coverageStats, suggestions, analysisType = 'green') =>
     set({ distMap, coverageStats, suggestions, analysisType, showAnalysis: true }),
   setShowAnalysis: (v) => set({ showAnalysis: v }),
