@@ -1,7 +1,12 @@
 import { useStore } from '../store/useStore.js'
 import { LABELS } from '../core/raster.js'
-import { saveProject } from '../core/db.js'
-import { greenServiceDistance, coverageStats, generateSuggestions } from '../core/analysis.js'
+import { buildProjectSnapshot, downloadProjectFile } from '../core/projectFile.js'
+import { greenServiceDistance, roadServiceDistance, coverageStats, generateSuggestions, generateRoadSuggestions } from '../core/analysis.js'
+
+const ANALYSIS_OPTIONS = [
+  { id: 'green', label: '绿地可达性' },
+  { id: 'road', label: '道路可达性' },
+]
 
 const TOOLS = [
   { id: 'brush',   icon: '⬤', label: '笔刷' },
@@ -14,36 +19,49 @@ export default function Toolbar() {
     activeTool, setActiveTool,
     brushRadius, setBrushRadius,
     opacity, setOpacity,
-    undo, redo,
+    editTarget, setEditTarget,
+    designabilityPaintValue, setDesignabilityPaintValue,
+    undo, redo, canUndo, canRedo,
     raster,
     setDistMap, setProcessing,
     showAnalysis, setShowAnalysis,
+    analysisType,
+    heatmapScale, setHeatmapScale,
+    heatmapGamma, setHeatmapGamma,
     imageName,
   } = useStore()
 
+  const canUndoNow = canUndo()
+  const canRedoNow = canRedo()
+
   const runAnalysis = async () => {
     if (!raster) return
+
+    if (analysisType === 'road') {
+      setProcessing(true, '计算道路可达性...')
+      await new Promise(r => setTimeout(r, 30))
+      const dist = roadServiceDistance(raster, 2)
+      const stats = coverageStats(dist, raster.cellSize, [100, 300, 500])
+      const suggestions = generateRoadSuggestions(raster, dist)
+      setDistMap(dist, stats, suggestions, 'road')
+      setProcessing(false)
+      return
+    }
+
     setProcessing(true, '计算绿地服务圈...')
     await new Promise(r => setTimeout(r, 30))
     const dist = greenServiceDistance(raster, 3)
     const stats = coverageStats(dist, raster.cellSize)
     const suggestions = generateSuggestions(raster, dist)
-    setDistMap(dist, stats, suggestions)
+    setDistMap(dist, stats, suggestions, 'green')
     setProcessing(false)
   }
 
-  const saveToDb = async () => {
+  const saveProjectFile = () => {
     if (!raster) return
     try {
-      await saveProject({
-        id: 'project-1',
-        name: imageName || '未命名项目',
-        rasterData: Array.from(raster.data),
-        rasterWidth: raster.width,
-        rasterHeight: raster.height,
-        rasterCellSize: raster.cellSize,
-      })
-      alert('已保存到本地 IndexedDB')
+      const snapshot = buildProjectSnapshot(useStore.getState())
+      downloadProjectFile(snapshot)
     } catch (e) {
       alert('保存失败: ' + e.message)
     }
@@ -69,11 +87,49 @@ export default function Toolbar() {
 
       <div style={styles.divider} />
 
-      {/* 标签快捷栏 */}
       <div style={styles.group}>
-        <div style={styles.groupLabel}>标签</div>
-        <LabelQuickPicker />
+        <div style={styles.groupLabel}>编辑属性</div>
+        <div style={styles.rowBtns}>
+          <button
+            style={{ ...styles.modeBtn, ...(editTarget === 'landuse' ? styles.modeBtnActive : {}) }}
+            onClick={() => setEditTarget('landuse')}
+          >
+            用地
+          </button>
+          <button
+            style={{ ...styles.modeBtn, ...(editTarget === 'designability' ? styles.modeBtnActive : {}) }}
+            onClick={() => setEditTarget('designability')}
+          >
+            可改
+          </button>
+        </div>
       </div>
+
+      <div style={styles.divider} />
+
+      {/* 标签快捷栏 */}
+      {editTarget === 'landuse' ? (
+        <div style={styles.group}>
+          <div style={styles.groupLabel}>标签</div>
+          <LabelQuickPicker />
+        </div>
+      ) : (
+        <div style={styles.group}>
+          <div style={styles.groupLabel}>可改属性</div>
+          <button
+            style={{ ...styles.actionBtn, ...(designabilityPaintValue === 1 ? styles.modeBtnActive : {}) }}
+            onClick={() => setDesignabilityPaintValue(1)}
+          >
+            标记可更新设计
+          </button>
+          <button
+            style={{ ...styles.actionBtn, ...(designabilityPaintValue === 0 ? styles.modeBtnActive : {}) }}
+            onClick={() => setDesignabilityPaintValue(0)}
+          >
+            标记不可更新
+          </button>
+        </div>
+      )}
 
       <div style={styles.divider} />
 
@@ -102,17 +158,57 @@ export default function Toolbar() {
 
       {/* 撤销/重做 */}
       <div style={styles.group}>
-        <button style={styles.actionBtn} onClick={undo} title="撤销 Ctrl+Z">↩ 撤销</button>
-        <button style={styles.actionBtn} onClick={redo} title="重做 Ctrl+Y">↪ 重做</button>
+        <button style={{ ...styles.actionBtn, ...(canUndoNow ? null : styles.actionBtnDisabled) }} onClick={undo} title="撤销 Ctrl+Z" disabled={!canUndoNow}>↩ 撤销</button>
+        <button style={{ ...styles.actionBtn, ...(canRedoNow ? null : styles.actionBtnDisabled) }} onClick={redo} title="重做 Ctrl+Y" disabled={!canRedoNow}>↪ 重做</button>
       </div>
 
       <div style={styles.divider} />
 
       {/* 分析 */}
       <div style={styles.group}>
+        <select
+          style={styles.select}
+          value={analysisType}
+          onChange={(e) => {
+            const t = e.target.value
+            useStore.setState({
+              analysisType: t,
+              heatmapScale: 0.4,
+              heatmapGamma: 0.4,
+            })
+          }}
+        >
+          {ANALYSIS_OPTIONS.map((o) => (
+            <option key={o.id} value={o.id}>{o.label}</option>
+          ))}
+        </select>
         <button style={styles.analysisBtn} onClick={runAnalysis}>
-          ◎ 绿地分析
+          ◎ 运行分析
         </button>
+        {showAnalysis && (
+          <>
+            <div style={styles.groupLabel}>热力范围 {heatmapScale.toFixed(1)}×</div>
+            <input
+              type="range"
+              min="0.1"
+              max="2.0"
+              step="0.1"
+              value={heatmapScale}
+              style={styles.slider}
+              onChange={(e) => setHeatmapScale(parseFloat(e.target.value))}
+            />
+            <div style={styles.groupLabel}>梯度对比 {heatmapGamma.toFixed(1)}</div>
+            <input
+              type="range"
+              min="0.1"
+              max="1.6"
+              step="0.1"
+              value={heatmapGamma}
+              style={styles.slider}
+              onChange={(e) => setHeatmapGamma(parseFloat(e.target.value))}
+            />
+          </>
+        )}
         {showAnalysis && (
           <button style={styles.actionBtn} onClick={() => setShowAnalysis(false)}>
             关闭热力图
@@ -124,16 +220,15 @@ export default function Toolbar() {
 
       {/* 保存 */}
       <div style={styles.group}>
-        <button style={styles.actionBtn} onClick={saveToDb}>💾 保存</button>
+        <button style={styles.actionBtn} onClick={saveProjectFile}>💾 导出项目</button>
       </div>
     </div>
   )
 }
 
 function LabelQuickPicker() {
-  const { activeLabel, setActiveLabel, setActivePanel } = useStore()
-  // 只展示前6个常用标签
-  const visible = LABELS.slice(0, 8)
+  const { activeLabel, setActiveLabel } = useStore()
+  const visible = LABELS.slice(0, 12)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
       {visible.map(l => (
@@ -174,6 +269,22 @@ const styles = {
     marginBottom: '2px',
   },
   divider: { height: '1px', background: '#1e2d3d', margin: '2px 0' },
+  rowBtns: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' },
+  modeBtn: {
+    padding: '6px 0',
+    background: 'transparent',
+    border: '1px solid #1e2d3d',
+    color: '#64748b',
+    fontSize: '10px',
+    fontFamily: "'DM Mono', monospace",
+    borderRadius: '3px',
+    cursor: 'pointer',
+  },
+  modeBtnActive: {
+    borderColor: '#ef4444',
+    color: '#fecaca',
+    background: '#7f1d1d33',
+  },
   toolBtn: {
     display: 'flex', alignItems: 'center', gap: '6px',
     padding: '6px 8px',
@@ -205,6 +316,21 @@ const styles = {
     borderRadius: '3px',
     transition: 'all 0.1s',
     textAlign: 'left',
+  },
+  actionBtnDisabled: {
+    opacity: 0.4,
+    cursor: 'not-allowed',
+  },
+  select: {
+    width: '100%',
+    background: '#0d1117',
+    border: '1px solid #1e2d3d',
+    color: '#cbd5e1',
+    padding: '6px 8px',
+    fontSize: '11px',
+    fontFamily: "'DM Mono', monospace",
+    borderRadius: '3px',
+    outline: 'none',
   },
   analysisBtn: {
     padding: '7px 8px',
