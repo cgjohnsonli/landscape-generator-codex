@@ -8,7 +8,10 @@ const TABS = [
 ]
 
 export default function SidePanel() {
-  const { activePanel, setActivePanel, raster, suggestions, coverageStats, analysisType } = useStore()
+  const {
+    activePanel, setActivePanel, raster, suggestions, coverageStats, analysisType,
+    distMap, heatmapScale, heatmapGamma,
+  } = useStore()
 
   return (
     <div style={styles.panel}>
@@ -27,7 +30,17 @@ export default function SidePanel() {
       <div style={styles.body}>
         {activePanel === 'label' && <LabelPanel />}
         {activePanel === 'stats' && <StatsPanel raster={raster} />}
-        {activePanel === 'analysis' && <AnalysisPanel suggestions={suggestions} coverageStats={coverageStats} analysisType={analysisType} />}
+        {activePanel === 'analysis' && (
+          <AnalysisPanel
+            suggestions={suggestions}
+            coverageStats={coverageStats}
+            analysisType={analysisType}
+            distMap={distMap}
+            raster={raster}
+            heatmapScale={heatmapScale}
+            heatmapGamma={heatmapGamma}
+          />
+        )}
       </div>
     </div>
   )
@@ -112,7 +125,34 @@ function StatsPanel({ raster }) {
   )
 }
 
-function AnalysisPanel({ suggestions, coverageStats, analysisType }) {
+
+function computeHeatmapBands(distMap, raster, analysisType, heatmapScale, heatmapGamma) {
+  if (!distMap || !raster) return null
+  const baseMaxDist = analysisType === 'road' ? 300 / raster.cellSize : 500 / raster.cellSize
+  const maxDist = Math.max(1, baseMaxDist * heatmapScale)
+
+  let green = 0
+  let yellow = 0
+  let red = 0
+  let valid = 0
+
+  for (let i = 0; i < distMap.length; i++) {
+    const d = distMap[i]
+    if (d < 0) continue
+    const normalized = Math.min(d / maxDist, 1)
+    const t = Math.pow(normalized, heatmapGamma)
+    valid++
+    if (t < 0.33) green++
+    else if (t < 0.66) yellow++
+    else red++
+  }
+
+  if (valid === 0) return null
+  const pct = (v) => ((v / valid) * 100).toFixed(1)
+  return { greenPct: pct(green), yellowPct: pct(yellow), redPct: pct(red), valid }
+}
+
+function AnalysisPanel({ suggestions, coverageStats, analysisType, distMap, raster, heatmapScale, heatmapGamma }) {
   if (!suggestions) return (
     <div style={styles.empty}>
 点击工具栏「运行分析」按钮<br/>运行空间分析热力图
@@ -132,6 +172,14 @@ function AnalysisPanel({ suggestions, coverageStats, analysisType }) {
         </div>
       ))}
 
+      <HeatmapBandSummary
+        distMap={distMap}
+        raster={raster}
+        analysisType={analysisType}
+        heatmapScale={heatmapScale}
+        heatmapGamma={heatmapGamma}
+      />
+
       <div style={{ marginTop: '20px' }}>
         <div style={styles.sectionTitle}>优化建议</div>
         {suggestions?.suggestions?.map((s, i) => (
@@ -142,6 +190,33 @@ function AnalysisPanel({ suggestions, coverageStats, analysisType }) {
             <div style={styles.suggText}>{s.text}</div>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+
+function HeatmapBandSummary({ distMap, raster, analysisType, heatmapScale, heatmapGamma }) {
+  const bands = computeHeatmapBands(distMap, raster, analysisType, heatmapScale, heatmapGamma)
+  if (!bands) return null
+
+  return (
+    <div style={{ marginTop: '16px' }}>
+      <div style={styles.sectionTitle}>热力分布占比</div>
+      <div style={styles.bandRow}>
+        <span style={{ ...styles.bandDot, background: '#22c55e' }} />
+        <span style={styles.bandLabel}>绿色（高可达）</span>
+        <span style={styles.bandPct}>{bands.greenPct}%</span>
+      </div>
+      <div style={styles.bandRow}>
+        <span style={{ ...styles.bandDot, background: '#facc15' }} />
+        <span style={styles.bandLabel}>黄色（中等）</span>
+        <span style={styles.bandPct}>{bands.yellowPct}%</span>
+      </div>
+      <div style={styles.bandRow}>
+        <span style={{ ...styles.bandDot, background: '#ef4444' }} />
+        <span style={styles.bandLabel}>红色（低可达）</span>
+        <span style={styles.bandPct}>{bands.redPct}%</span>
       </div>
     </div>
   )

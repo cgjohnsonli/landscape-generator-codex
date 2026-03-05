@@ -140,8 +140,8 @@ export default function Toolbar() {
             const t = e.target.value
             useStore.setState({
               analysisType: t,
-              heatmapScale: t === 'road' ? 0.8 : 1,
-              heatmapGamma: t === 'road' ? 0.6 : 0.7,
+              heatmapScale: 0.4,
+              heatmapGamma: 0.4,
             })
           }}
         >
@@ -157,7 +157,7 @@ export default function Toolbar() {
             <div style={styles.groupLabel}>热力范围 {heatmapScale.toFixed(1)}×</div>
             <input
               type="range"
-              min="0.4"
+              min="0.1"
               max="2.0"
               step="0.1"
               value={heatmapScale}
@@ -167,7 +167,7 @@ export default function Toolbar() {
             <div style={styles.groupLabel}>梯度对比 {heatmapGamma.toFixed(1)}</div>
             <input
               type="range"
-              min="0.4"
+              min="0.1"
               max="1.6"
               step="0.1"
               value={heatmapGamma}

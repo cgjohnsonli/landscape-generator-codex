@@ -41,8 +41,8 @@ export const useStore = create((set, get) => ({
   suggestions: null,
   showAnalysis: false,
   analysisType: 'green',
-  heatmapScale: 1,
-  heatmapGamma: 0.7,
+  heatmapScale: 0.4,
+  heatmapGamma: 0.4,
 
   // ── 图层 ──
   layerSettings: createDefaultLayers(),
