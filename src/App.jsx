@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect } from 'react'
 import { useStore } from './store/useStore.js'
 import Toolbar from './components/Toolbar.jsx'
 import MapCanvas from './components/MapCanvas.jsx'
@@ -8,7 +8,7 @@ import ProcessingOverlay from './components/ProcessingOverlay.jsx'
 import ClusterMapper from './components/ClusterMapper.jsx'
 
 export default function App() {
-  const { raster, clusters, clusterToLabel, isProcessing, canUndo, canRedo, undo, redo } = useStore()
+  const { raster, clusters, isProcessing, undo, redo } = useStore()
 
   // 全局键盘快捷键
   useEffect(() => {
