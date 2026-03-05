@@ -53,6 +53,13 @@ export function greenServiceDistance(raster, targetLabelId = 3) {
 }
 
 /**
+ * 道路可达性：到最近道路格元的距离（格元数）
+ */
+export function roadServiceDistance(raster, roadLabelId = 2) {
+  return greenServiceDistance(raster, roadLabelId)
+}
+
+/**
  * 根据距离图生成覆盖统计
  * @param {Float32Array} dist
  * @param {number} cellSizeM 格元实际尺寸（米）
@@ -160,4 +167,46 @@ export function generateSuggestions(raster, distMap) {
   }
 
   return { greenRatio, uncoveredRatio, suggestions }
+}
+
+
+/**
+ * 生成道路可达性建议（基于规则）
+ */
+export function generateRoadSuggestions(raster, distMap) {
+  const { data, cellSize } = raster
+  let buildingCells = 0
+  let farBuildingCells = 0
+
+  for (let i = 0; i < data.length; i++) {
+    if (data[i] === 1) {
+      buildingCells++
+      if (distMap && (distMap[i] < 0 || distMap[i] > 300 / cellSize)) farBuildingCells++
+    }
+  }
+
+  const farRatio = buildingCells > 0 ? (farBuildingCells / buildingCells * 100).toFixed(1) : '0.0'
+  const suggestions = []
+
+  if (buildingCells === 0) {
+    suggestions.push({
+      level: 'warning',
+      title: '未检测到建筑用地',
+      text: '当前样本中未检测到建筑用地，无法评估道路服务覆盖。',
+    })
+  } else if (parseFloat(farRatio) > 25) {
+    suggestions.push({
+      level: 'warning',
+      title: '道路服务覆盖偏弱',
+      text: `${farRatio}% 的建筑用地距离道路超过 300m，建议优化支路连通或增设慢行通道。`,
+    })
+  } else {
+    suggestions.push({
+      level: 'ok',
+      title: '道路服务覆盖良好',
+      text: `建筑用地中仅 ${farRatio}% 超过 300m，道路可达性整体较好。`,
+    })
+  }
+
+  return { farRatio, suggestions }
 }
