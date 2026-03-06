@@ -27,17 +27,17 @@ export function canRedo(history) {
   return history.cursor < history.stack.length - 1
 }
 
-export function undo(history, raster) {
+export function undo(history, ...args) {
   if (!canUndo(history)) return false
-  history.stack[history.cursor].undo(raster)
+  history.stack[history.cursor].undo(...args)
   history.cursor--
   return true
 }
 
-export function redo(history, raster) {
+export function redo(history, ...args) {
   if (!canRedo(history)) return false
   history.cursor++
-  history.stack[history.cursor].redo(raster)
+  history.stack[history.cursor].redo(...args)
   return true
 }
 
