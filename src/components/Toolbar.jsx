@@ -1,5 +1,5 @@
 import { useStore } from '../store/useStore.js'
-import { LABELS } from '../core/raster.js'
+import { LABELS, ACTIVE_LABELS, hasSubCategories, getSubCategories, getSubCategoryColor } from '../core/raster.js'
 import { buildProjectSnapshot, downloadProjectFile } from '../core/projectFile.js'
 import { greenServiceDistance, roadServiceDistance, coverageStats, generateSuggestions, generateRoadSuggestions } from '../core/analysis.js'
 
@@ -258,23 +258,47 @@ export default function Toolbar() {
 }
 
 function LabelQuickPicker() {
-  const { activeLabel, setActiveLabel } = useStore()
-  const visible = LABELS.slice(0, 12)
+  const { activeLabel, setActiveLabel, activeSubCategory, selectSubCategory } = useStore()
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-      {visible.map(l => (
-        <button
-          key={l.id}
-          style={{
-            ...styles.labelChip,
-            borderColor: activeLabel === l.id ? l.color : 'transparent',
-            background: activeLabel === l.id ? l.color + '22' : 'transparent',
-          }}
-          onClick={() => setActiveLabel(l.id)}
-        >
-          <span style={{ ...styles.labelDot, background: l.color }} />
-          <span style={styles.labelName}>{l.name}</span>
-        </button>
+      {ACTIVE_LABELS.map(l => (
+        <div key={l.id}>
+          <button
+            style={{
+              ...styles.labelChip,
+              borderColor: activeLabel === l.id ? l.color : 'transparent',
+              background: activeLabel === l.id ? l.color + '22' : 'transparent',
+            }}
+            onClick={() => setActiveLabel(l.id)}
+          >
+            <span style={{ ...styles.labelDot, background: l.color }} />
+            <span style={styles.labelName}>{l.name}</span>
+          </button>
+          {activeLabel === l.id && hasSubCategories(l.id) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
+              {getSubCategories(l.id).map(sc => {
+                const scColor = getSubCategoryColor(l.id, sc.subId)
+                const isActive = activeSubCategory === sc.subId
+                return (
+                  <button
+                    key={sc.subId}
+                    style={{
+                      ...styles.labelChip,
+                      paddingLeft: '18px',
+                      fontSize: '10px',
+                      borderColor: isActive ? scColor : 'transparent',
+                      background: isActive ? scColor + '22' : 'transparent',
+                    }}
+                    onClick={() => selectSubCategory(l.id, sc.subId)}
+                  >
+                    <span style={{ ...styles.labelDot, width: '6px', height: '6px', background: scColor }} />
+                    <span style={styles.labelName}>{sc.name}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
       ))}
     </div>
   )

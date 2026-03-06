@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback } from 'react'
 import { useStore } from '../store/useStore.js'
-import { LABELS, paintBrush, fillPolygon } from '../core/raster.js'
+import { LABELS, paintBrush, fillPolygon, hasSubCategories, getSubCategoryRgb } from '../core/raster.js'
 import { changedToCommand, pushHistory } from '../core/history.js'
 import { distToImageData } from '../core/analysis.js'
 
@@ -11,6 +11,8 @@ export default function MapCanvas() {
     raster, sourceImage, renderTick, opacity,
     activeTool,
     designabilityMap,
+    subCategoryMap,
+    showSubCategories,
     showDesignability,
     distMap, showAnalysis, analysisType,
     heatmapScale, heatmapGamma,
@@ -41,10 +43,13 @@ export default function MapCanvas() {
 
     const imgData = new ImageData(raster.width, raster.height)
     const { data } = imgData
+    const useSub = showSubCategories && subCategoryMap
     for (let i = 0; i < raster.data.length; i++) {
       const labelId = raster.data[i]
       const layer = layerSettings[labelId] ?? { visible: true }
-      const [r, g, b] = LABELS[labelId]?.rgb ?? [100, 116, 139]
+      const [r, g, b] = useSub && hasSubCategories(labelId)
+        ? getSubCategoryRgb(labelId, subCategoryMap[i])
+        : (LABELS[labelId]?.rgb ?? [100, 116, 139])
       const base = i * 4
       data[base] = r
       data[base + 1] = g
@@ -75,7 +80,7 @@ export default function MapCanvas() {
         ctx.fillRect(x, y, 1, 1)
       }
     }
-  }, [raster, renderTick, opacity, showAnalysis, distMap, analysisType, heatmapScale, heatmapGamma, layerSettings, showDesignability, designabilityMap])
+  }, [raster, renderTick, opacity, showAnalysis, distMap, analysisType, heatmapScale, heatmapGamma, layerSettings, showDesignability, designabilityMap, showSubCategories, subCategoryMap])
 
   useEffect(() => {
     const c = canvasRef.current
@@ -113,7 +118,10 @@ export default function MapCanvas() {
     const first = changedMap.values().next().value
     const target = first?.target ?? 'landuse'
     const { history: hist } = useStore.getState()
-    const changed = Array.from(changedMap.entries()).map(([idx, rec]) => ({ idx, old: rec.old, labelId: rec.labelId }))
+    const changed = Array.from(changedMap.entries()).map(([idx, rec]) => ({
+      idx, old: rec.old, labelId: rec.labelId,
+      ...(rec.oldSub !== undefined ? { oldSub: rec.oldSub, subId: rec.subId } : {}),
+    }))
     const command = target === 'designability'
       ? changedToDesignabilityCommand(changed, '可改笔刷')
       : changedToCommand(changed, '笔刷')
@@ -126,13 +134,17 @@ export default function MapCanvas() {
     const {
       raster: r,
       activeLabel: lbl,
+      activeSubCategory: subCat,
       brushRadius: br,
       editTarget: target,
       designabilityPaintValue: paintValue,
       designabilityMap: dMap,
+      subCategoryMap: scMap,
     } = useStore.getState()
     if (!r) return
     const scale = r.cellSize ?? 1
+    const hasSub = target === 'landuse' && scMap && hasSubCategories(lbl)
+
     const changed = target === 'designability'
       ? paintDesignability(dMap, r, px * scale, py * scale, br * scale, paintValue, (idx) => !(layerSettings[r.data[idx]]?.locked))
       : paintBrush(
@@ -143,14 +155,54 @@ export default function MapCanvas() {
         lbl,
         (oldLabel) => !(layerSettings[oldLabel]?.locked),
       )
+
+    // 为主类改变的像素同步写入子类
+    if (hasSub) {
+      for (const item of changed) {
+        item.oldSub = scMap[item.idx]
+        item.subId = subCat
+        scMap[item.idx] = subCat
+      }
+    }
+
+    // 对已是同一主类但子类不同的像素，单独更新子类
+    // （paintBrush 因 old===labelId 跳过了这些像素）
+    if (hasSub) {
+      const rpx = px * scale, rpy = py * scale, radius = br * scale
+      const r2 = radius * radius
+      const cs = r.cellSize
+      const minCol = Math.max(0, Math.floor((rpx - radius) / cs))
+      const maxCol = Math.min(r.width - 1, Math.ceil((rpx + radius) / cs))
+      const minRow = Math.max(0, Math.floor((rpy - radius) / cs))
+      const maxRow = Math.min(r.height - 1, Math.ceil((rpy + radius) / cs))
+      for (let row = minRow; row <= maxRow; row++) {
+        for (let col = minCol; col <= maxCol; col++) {
+          const cx = (col + 0.5) * cs, cy = (row + 0.5) * cs
+          const dx = cx - rpx, dy = cy - rpy
+          if (dx * dx + dy * dy > r2) continue
+          const idx = row * r.width + col
+          if (r.data[idx] !== lbl) continue       // 只处理同主类像素
+          if (scMap[idx] === subCat) continue      // 子类已相同，跳过
+          const oldSub = scMap[idx]
+          scMap[idx] = subCat
+          changed.push({ idx, old: lbl, labelId: lbl, oldSub, subId: subCat })
+        }
+      }
+    }
+
     if (changed.length === 0) return
 
     const changedMap = editState.current.strokeChangedMap
     for (const item of changed) {
       if (!changedMap.has(item.idx)) {
-        changedMap.set(item.idx, { old: item.old, labelId: item.labelId, target })
+        changedMap.set(item.idx, {
+          old: item.old, labelId: item.labelId, target,
+          ...(item.oldSub !== undefined ? { oldSub: item.oldSub, subId: item.subId } : {}),
+        })
       } else {
-        changedMap.get(item.idx).labelId = item.labelId
+        const rec = changedMap.get(item.idx)
+        rec.labelId = item.labelId
+        if (item.subId !== undefined) rec.subId = item.subId
       }
     }
     useStore.setState({ renderTick: useStore.getState().renderTick + 1 })
@@ -188,16 +240,49 @@ export default function MapCanvas() {
     const {
       raster: r,
       activeLabel: lbl,
+      activeSubCategory: subCat,
       history: hist,
       editTarget: target,
       designabilityPaintValue: paintValue,
       designabilityMap: dMap,
+      subCategoryMap: scMap,
     } = useStore.getState()
     if (!r) return
     const rasterPts = pts.map(({ x, y }) => ({ x: toRasterPixel(x), y: toRasterPixel(y) }))
     const changed = target === 'designability'
       ? fillDesignability(dMap, r, rasterPts, paintValue, (idx) => !(layerSettings[r.data[idx]]?.locked))
       : fillPolygon(r, rasterPts, lbl, (oldLabel) => !(layerSettings[oldLabel]?.locked))
+    const hasSub = target === 'landuse' && scMap && hasSubCategories(lbl)
+    // 为主类改变的像素同步写入子类
+    if (hasSub) {
+      for (const item of changed) {
+        item.oldSub = scMap[item.idx]
+        item.subId = subCat
+        scMap[item.idx] = subCat
+      }
+    }
+    // 对已是同一主类但子类不同的像素，单独更新子类
+    if (hasSub && rasterPts.length >= 3) {
+      const xs = rasterPts.map(p => p.x)
+      const ys = rasterPts.map(p => p.y)
+      const cs = r.cellSize
+      const minCol = Math.max(0, Math.floor(Math.min(...xs) / cs))
+      const maxCol = Math.min(r.width - 1, Math.ceil(Math.max(...xs) / cs))
+      const minRow = Math.max(0, Math.floor(Math.min(...ys) / cs))
+      const maxRow = Math.min(r.height - 1, Math.ceil(Math.max(...ys) / cs))
+      for (let row = minRow; row <= maxRow; row++) {
+        for (let col = minCol; col <= maxCol; col++) {
+          const cx = (col + 0.5) * cs, cy = (row + 0.5) * cs
+          if (!pointInPolygon(cx, cy, rasterPts)) continue
+          const idx = row * r.width + col
+          if (r.data[idx] !== lbl) continue
+          if (scMap[idx] === subCat) continue
+          const oldSub = scMap[idx]
+          scMap[idx] = subCat
+          changed.push({ idx, old: lbl, labelId: lbl, oldSub, subId: subCat })
+        }
+      }
+    }
     if (changed.length > 0) {
       const command = target === 'designability'
         ? changedToDesignabilityCommand(changed, '可改多边形')

@@ -12,13 +12,69 @@ export const LABELS = [
   { id: 2, name: '道路',       color: '#6b7280', rgb: [107, 114, 128] },
   { id: 3, name: '绿地/植被',  color: '#16a34a', rgb: [ 22, 163,  74] },
   { id: 4, name: '水体',       color: '#2563eb', rgb: [ 37,  99, 235] },
-  { id: 5, name: '农田',       color: '#ca8a04', rgb: [202, 138,   4] },
+  { id: 5, name: '农田',       color: '#ca8a04', rgb: [202, 138,   4], deprecated: true },
   { id: 6, name: '裸地',       color: '#b45309', rgb: [180,  83,   9] },
   { id: 7, name: '其他用地',   color: '#7c3aed', rgb: [124,  58, 237] },
   { id: 8, name: '硬质铺装',   color: '#9ca3af', rgb: [156, 163, 175] },
 ]
 
+export const ACTIVE_LABELS = LABELS.filter(l => !l.deprecated)
 export const LABEL_MAP = Object.fromEntries(LABELS.map(l => [l.id, l]))
+
+// ── 二级分类定义 ──
+// subId 0 为每个主类的默认子类
+// colorShift: 正值偏亮，负值偏暗
+export const SUB_CATEGORIES = {
+  1: [
+    { subId: 0, name: '居住',       colorShift: 0 },
+    { subId: 1, name: '商业',       colorShift: -25 },
+    { subId: 2, name: '公共服务',   colorShift: 25 },
+    { subId: 3, name: '设施',       colorShift: -50 },
+    { subId: 4, name: '物流仓储',   colorShift: 50 },
+    { subId: 5, name: '工业厂房',   colorShift: -75 },
+  ],
+  2: [
+    { subId: 0, name: '一级道路',   colorShift: 0 },
+    { subId: 1, name: '二级道路',   colorShift: -30 },
+    { subId: 2, name: '三级道路',   colorShift: 30 },
+  ],
+  3: [
+    { subId: 0, name: '综合公园',   colorShift: 0 },
+    { subId: 1, name: '社区公园',   colorShift: -20 },
+    { subId: 2, name: '专类公园',   colorShift: -40 },
+    { subId: 3, name: '游园',       colorShift: 25 },
+    { subId: 4, name: '防护绿地',   colorShift: 50 },
+    { subId: 5, name: '附属绿地',   colorShift: -60 },
+  ],
+}
+
+export function hasSubCategories(labelId) {
+  return (SUB_CATEGORIES[labelId]?.length ?? 0) > 0
+}
+
+export function getSubCategories(labelId) {
+  return SUB_CATEGORIES[labelId] ?? []
+}
+
+/** RGB 通道偏移，用于子类同色系深浅区分 */
+export function shiftColor(rgb, shift) {
+  return rgb.map(ch => Math.max(0, Math.min(255, ch + shift)))
+}
+
+/** 获取子类的显示 RGB */
+export function getSubCategoryRgb(labelId, subCatId) {
+  const base = LABELS[labelId]?.rgb ?? [100, 116, 139]
+  const subs = SUB_CATEGORIES[labelId]
+  if (!subs || subs.length === 0) return base
+  const sub = subs[subCatId] ?? subs[0]
+  return shiftColor(base, sub.colorShift)
+}
+
+/** 获取子类的显示 hex 颜色 */
+export function getSubCategoryColor(labelId, subCatId) {
+  const [r, g, b] = getSubCategoryRgb(labelId, subCatId)
+  return '#' + [r, g, b].map(c => c.toString(16).padStart(2, '0')).join('')
+}
 
 /**
  * 创建空的 RasterGrid
@@ -169,4 +225,20 @@ export function paintBrush(raster, px, py, radiusPx, labelId, canEditCell = () =
     }
   }
   return changed
+}
+
+/**
+ * 统计各主类下的子类面积分布
+ */
+export function computeSubCategoryStats(raster, subCategoryMap) {
+  if (!subCategoryMap) return {}
+  const result = {} // { [labelId]: { [subId]: count } }
+  for (let i = 0; i < raster.data.length; i++) {
+    const label = raster.data[i]
+    if (!SUB_CATEGORIES[label]) continue
+    const sub = subCategoryMap[i] ?? 0
+    if (!result[label]) result[label] = {}
+    result[label][sub] = (result[label][sub] ?? 0) + 1
+  }
+  return result
 }
