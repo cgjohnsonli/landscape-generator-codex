@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { useStore } from '../store/useStore.js'
 import { LABELS, buildRasterFromClusters } from '../core/raster.js'
 import { rgbToHex } from '../core/kmeans.js'
@@ -201,6 +201,47 @@ export default function ClusterMapper() {
       ctx.globalAlpha = 1
     }
   }, [previewGrid, sourceImage])
+
+
+  useEffect(() => {
+    if (!clusters || !imageData) return
+    const canvas = previewCanvasRef.current
+    if (!canvas) return
+
+    const previewGrid = buildRasterFromClusters(
+      imageData.width,
+      imageData.height,
+      clusters.assignments,
+      mapping,
+      2,
+    )
+
+    canvas.width = previewGrid.width
+    canvas.height = previewGrid.height
+    const ctx = canvas.getContext('2d')
+
+    const imgData = new ImageData(previewGrid.width, previewGrid.height)
+    const { data } = imgData
+
+    for (let i = 0; i < previewGrid.data.length; i++) {
+      const labelId = previewGrid.data[i]
+      const [r, g, b] = LABELS[labelId]?.rgb ?? [100, 116, 139]
+      const base = i * 4
+      data[base] = r
+      data[base + 1] = g
+      data[base + 2] = b
+      data[base + 3] = 255
+    }
+
+    ctx.putImageData(imgData, 0, 0)
+
+    // 叠加原图，方便用户理解映射结果落在什么区域
+    if (sourceImage) {
+      ctx.globalAlpha = 0.35
+      ctx.drawImage(sourceImage, 0, 0, previewGrid.width, previewGrid.height)
+      ctx.globalAlpha = 1
+    }
+  }, [clusters, imageData, mapping, sourceImage])
 
   const confirmMapping = async () => {
     if (!clusters || !imageData) {
