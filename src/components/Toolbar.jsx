@@ -40,6 +40,8 @@ export default function Toolbar() {
     editTarget, setEditTarget,
     designabilityPaintValue, setDesignabilityPaintValue,
     showDesignability,
+    calibrationTargetMeters, setCalibrationTargetMeters,
+    calibrationPoints,
     undo, redo, canUndo, canRedo,
     raster,
     setDistMap, setProcessing,
@@ -237,6 +239,30 @@ export default function Toolbar() {
 
 
       <div style={styles.divider} />
+
+      {/* 比例校准 */}
+      <div style={styles.group}>
+        <div style={styles.groupLabel}>比例校准</div>
+        <div style={styles.rowBtns}>
+          {[200, 100, 50].map((m) => (
+            <button
+              key={m}
+              style={{ ...styles.modeBtn, ...(calibrationTargetMeters === m ? styles.modeBtnActive : {}) }}
+              onClick={() => {
+                setCalibrationTargetMeters(m)
+                useStore.getState().setCalibrationPoints([])
+              }}
+            >
+              {m}米
+            </button>
+          ))}
+        </div>
+        {calibrationTargetMeters && (
+          <div style={styles.hintText}>
+            请在地图上点击两点，表示 {calibrationTargetMeters} 米（已选点 {calibrationPoints.length}/2）
+          </div>
+        )}
+      </div>
 
       {/* 快速设计 */}
       <div style={styles.group}>

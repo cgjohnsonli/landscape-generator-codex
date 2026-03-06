@@ -39,6 +39,8 @@ export const useStore = create((set, get) => ({
   editTarget: 'landuse',   // 'landuse' | 'designability'
   designabilityPaintValue: 1,
   showDesignability: false,
+  calibrationTargetMeters: null,
+  calibrationPoints: [],
 
   // ── 历史 ──
   history: createHistory(),
@@ -68,6 +70,8 @@ export const useStore = create((set, get) => ({
     designabilityMap: raster ? new Uint8Array(raster.width * raster.height) : null,
     greenSubtypeMap: raster ? new Uint8Array(raster.width * raster.height) : null,
     quickDesignMarkers: [],
+    calibrationTargetMeters: null,
+    calibrationPoints: [],
     history: createHistory(),
     renderTick: get().renderTick + 1,
   }),
@@ -96,6 +100,17 @@ export const useStore = create((set, get) => ({
   setEditTarget: (v) => set({ editTarget: v }),
   setDesignabilityPaintValue: (v) => set({ designabilityPaintValue: v }),
   setShowDesignability: (v) => set({ showDesignability: v }),
+  setCalibrationTargetMeters: (v) => set({ calibrationTargetMeters: v }),
+  setCalibrationPoints: (pts) => set({ calibrationPoints: pts }),
+  setRasterCellSize: (cellSize) => set((state) => {
+    if (!state.raster) return {}
+    return {
+      raster: { ...state.raster, cellSize },
+      calibrationTargetMeters: null,
+      calibrationPoints: [],
+      renderTick: get().renderTick + 1,
+    }
+  }),
   setDesignabilityMap: (map) => set({ designabilityMap: map, renderTick: get().renderTick + 1 }),
   setGreenSubtypeMap: (map) => set({ greenSubtypeMap: map, renderTick: get().renderTick + 1 }),
   addQuickDesignMarker: (marker) => set((state) => ({
@@ -121,6 +136,8 @@ export const useStore = create((set, get) => ({
     suggestions: null,
     history: createHistory(),
     activePanel: 'label',
+    calibrationTargetMeters: null,
+    calibrationPoints: [],
     renderTick: get().renderTick + 1,
   }),
   setActivePanel: (p) => set({ activePanel: p }),

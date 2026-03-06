@@ -14,6 +14,7 @@ export default function MapCanvas() {
     designabilityMap, greenSubtypeMap,
     showDesignability,
     quickDesignMarkers, addQuickDesignMarker, removeQuickDesignMarker,
+    calibrationTargetMeters, calibrationPoints, setCalibrationPoints, setRasterCellSize,
     distMap, showAnalysis, analysisType,
     heatmapScale, heatmapGamma,
     layerSettings,
@@ -215,6 +216,27 @@ export default function MapCanvas() {
   const onMouseDown = useCallback((e) => {
     const [px, py] = getCanvasPos(e)
 
+    if (calibrationTargetMeters) {
+      if (e.button !== 0) return
+      e.preventDefault()
+      if (calibrationPoints.length === 0) {
+        setCalibrationPoints([{ x: px, y: py }])
+        drawCalibrationGuide(px, py)
+        return
+      }
+      const p0 = calibrationPoints[0]
+      const distCells = Math.hypot(px - p0.x, py - p0.y)
+      if (distCells < 1) {
+        alert('请拉开两点距离后再校准比例尺')
+        setCalibrationPoints([])
+        return
+      }
+      const nextCellSize = calibrationTargetMeters / distCells
+      setRasterCellSize(nextCellSize)
+      alert(`比例尺校准完成：每格约 ${nextCellSize.toFixed(3)} 米`)
+      return
+    }
+
     // 中键（滚轮）强制平移
     if (e.button === 1) {
       e.preventDefault()
@@ -257,10 +279,15 @@ export default function MapCanvas() {
       pts.push({ x: px, y: py })
       drawPolygonPreview(px, py)
     }
-  }, [applyBrush, drawPolygonPreview, finishPolygon, getCanvasPos, pan.x, pan.y])
+  }, [applyBrush, drawPolygonPreview, finishPolygon, getCanvasPos, pan.x, pan.y, calibrationTargetMeters, calibrationPoints, setCalibrationPoints, setRasterCellSize])
 
   const onMouseMove = useCallback((e) => {
     const [px, py] = getCanvasPos(e)
+
+    if (calibrationTargetMeters) {
+      drawCalibrationGuide(px, py)
+      return
+    }
 
     if (editState.current.isPanning) {
       const dx = e.clientX - editState.current.panStartX
@@ -276,7 +303,7 @@ export default function MapCanvas() {
       drawPolygonPreview(px, py)
     }
     if (tool === 'brush') drawBrushCursor(px, py)
-  }, [applyBrush, drawPolygonPreview, getCanvasPos])
+  }, [applyBrush, drawPolygonPreview, getCanvasPos, calibrationTargetMeters, drawCalibrationGuide])
 
   const onMouseUp = useCallback(() => {
     if (editState.current.isDrawing) {
@@ -302,6 +329,36 @@ export default function MapCanvas() {
     ctx.setLineDash([3, 2])
     ctx.stroke()
     ctx.setLineDash([])
+  }
+
+  function drawCalibrationGuide(mouseX, mouseY) {
+    const overlay = overlayRef.current
+    if (!overlay) return
+    const ctx = overlay.getContext('2d')
+    ctx.clearRect(0, 0, overlay.width, overlay.height)
+    if (!calibrationTargetMeters) return
+    if (calibrationPoints.length === 0) return
+
+    const p0 = calibrationPoints[0]
+    const p1 = (mouseX !== undefined && mouseY !== undefined)
+      ? { x: mouseX, y: mouseY }
+      : p0
+
+    ctx.beginPath()
+    ctx.moveTo(p0.x, p0.y)
+    ctx.lineTo(p1.x, p1.y)
+    ctx.strokeStyle = '#38bdf8'
+    ctx.lineWidth = 1.5
+    ctx.setLineDash([4, 3])
+    ctx.stroke()
+    ctx.setLineDash([])
+
+    for (const p of [p0, p1]) {
+      ctx.beginPath()
+      ctx.arc(p.x, p.y, 3, 0, Math.PI * 2)
+      ctx.fillStyle = '#0ea5e9'
+      ctx.fill()
+    }
   }
 
   const onMouseLeave = useCallback(() => {
@@ -365,9 +422,11 @@ export default function MapCanvas() {
     useStore.setState({ history: { ...hist }, renderTick: useStore.getState().renderTick + 1 })
   }, [getCanvasPos, layerSettings, addQuickDesignMarker])
 
-  const cursorStyle = editState.current.isPanning
-    ? 'grabbing'
-    : activeTool === 'brush'
+  const cursorStyle = calibrationTargetMeters
+    ? 'crosshair'
+    : editState.current.isPanning
+      ? 'grabbing'
+      : activeTool === 'brush'
       ? 'none'
       : activeTool === 'polygon'
         ? 'crosshair'
