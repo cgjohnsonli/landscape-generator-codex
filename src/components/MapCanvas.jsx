@@ -1,8 +1,9 @@
 import React, { useRef, useEffect, useCallback } from 'react'
 import { useStore } from '../store/useStore.js'
-import { LABELS, paintBrush, fillPolygon, hasSubCategories, getSubCategoryRgb } from '../core/raster.js'
+import { LABELS, paintBrush, fillPolygon } from '../core/raster.js'
 import { changedToCommand, pushHistory } from '../core/history.js'
 import { distToImageData } from '../core/analysis.js'
+import { PARK_GREEN_SUBTYPE_ID } from '../core/greenSubtype.js'
 
 export default function MapCanvas() {
   const canvasRef = useRef(null)
@@ -10,10 +11,9 @@ export default function MapCanvas() {
   const {
     raster, sourceImage, renderTick, opacity,
     activeTool,
-    designabilityMap,
-    subCategoryMap,
-    showSubCategories,
+    designabilityMap, greenSubtypeMap,
     showDesignability,
+    quickDesignMarkers, addQuickDesignMarker, removeQuickDesignMarker,
     distMap, showAnalysis, analysisType,
     heatmapScale, heatmapGamma,
     layerSettings,
@@ -47,9 +47,7 @@ export default function MapCanvas() {
     for (let i = 0; i < raster.data.length; i++) {
       const labelId = raster.data[i]
       const layer = layerSettings[labelId] ?? { visible: true }
-      const [r, g, b] = useSub && hasSubCategories(labelId)
-        ? getSubCategoryRgb(labelId, subCategoryMap[i])
-        : (LABELS[labelId]?.rgb ?? [100, 116, 139])
+      const [r, g, b] = LABELS[labelId]?.rgb ?? [100, 116, 139]
       const base = i * 4
       data[base] = r
       data[base + 1] = g
@@ -80,7 +78,7 @@ export default function MapCanvas() {
         ctx.fillRect(x, y, 1, 1)
       }
     }
-  }, [raster, renderTick, opacity, showAnalysis, distMap, analysisType, heatmapScale, heatmapGamma, layerSettings, showDesignability, designabilityMap, showSubCategories, subCategoryMap])
+  }, [raster, renderTick, opacity, showAnalysis, distMap, analysisType, heatmapScale, heatmapGamma, layerSettings, showDesignability, designabilityMap])
 
   useEffect(() => {
     const c = canvasRef.current
@@ -118,10 +116,7 @@ export default function MapCanvas() {
     const first = changedMap.values().next().value
     const target = first?.target ?? 'landuse'
     const { history: hist } = useStore.getState()
-    const changed = Array.from(changedMap.entries()).map(([idx, rec]) => ({
-      idx, old: rec.old, labelId: rec.labelId,
-      ...(rec.oldSub !== undefined ? { oldSub: rec.oldSub, subId: rec.subId } : {}),
-    }))
+    const changed = Array.from(changedMap.entries()).map(([idx, rec]) => ({ idx, old: rec.old, labelId: rec.labelId }))
     const command = target === 'designability'
       ? changedToDesignabilityCommand(changed, '可改笔刷')
       : changedToCommand(changed, '笔刷')
@@ -134,17 +129,13 @@ export default function MapCanvas() {
     const {
       raster: r,
       activeLabel: lbl,
-      activeSubCategory: subCat,
       brushRadius: br,
       editTarget: target,
       designabilityPaintValue: paintValue,
       designabilityMap: dMap,
-      subCategoryMap: scMap,
     } = useStore.getState()
     if (!r) return
     const scale = r.cellSize ?? 1
-    const hasSub = target === 'landuse' && scMap && hasSubCategories(lbl)
-
     const changed = target === 'designability'
       ? paintDesignability(dMap, r, px * scale, py * scale, br * scale, paintValue, (idx) => !(layerSettings[r.data[idx]]?.locked))
       : paintBrush(
@@ -155,54 +146,14 @@ export default function MapCanvas() {
         lbl,
         (oldLabel) => !(layerSettings[oldLabel]?.locked),
       )
-
-    // 为主类改变的像素同步写入子类
-    if (hasSub) {
-      for (const item of changed) {
-        item.oldSub = scMap[item.idx]
-        item.subId = subCat
-        scMap[item.idx] = subCat
-      }
-    }
-
-    // 对已是同一主类但子类不同的像素，单独更新子类
-    // （paintBrush 因 old===labelId 跳过了这些像素）
-    if (hasSub) {
-      const rpx = px * scale, rpy = py * scale, radius = br * scale
-      const r2 = radius * radius
-      const cs = r.cellSize
-      const minCol = Math.max(0, Math.floor((rpx - radius) / cs))
-      const maxCol = Math.min(r.width - 1, Math.ceil((rpx + radius) / cs))
-      const minRow = Math.max(0, Math.floor((rpy - radius) / cs))
-      const maxRow = Math.min(r.height - 1, Math.ceil((rpy + radius) / cs))
-      for (let row = minRow; row <= maxRow; row++) {
-        for (let col = minCol; col <= maxCol; col++) {
-          const cx = (col + 0.5) * cs, cy = (row + 0.5) * cs
-          const dx = cx - rpx, dy = cy - rpy
-          if (dx * dx + dy * dy > r2) continue
-          const idx = row * r.width + col
-          if (r.data[idx] !== lbl) continue       // 只处理同主类像素
-          if (scMap[idx] === subCat) continue      // 子类已相同，跳过
-          const oldSub = scMap[idx]
-          scMap[idx] = subCat
-          changed.push({ idx, old: lbl, labelId: lbl, oldSub, subId: subCat })
-        }
-      }
-    }
-
     if (changed.length === 0) return
 
     const changedMap = editState.current.strokeChangedMap
     for (const item of changed) {
       if (!changedMap.has(item.idx)) {
-        changedMap.set(item.idx, {
-          old: item.old, labelId: item.labelId, target,
-          ...(item.oldSub !== undefined ? { oldSub: item.oldSub, subId: item.subId } : {}),
-        })
+        changedMap.set(item.idx, { old: item.old, labelId: item.labelId, target })
       } else {
-        const rec = changedMap.get(item.idx)
-        rec.labelId = item.labelId
-        if (item.subId !== undefined) rec.subId = item.subId
+        changedMap.get(item.idx).labelId = item.labelId
       }
     }
     useStore.setState({ renderTick: useStore.getState().renderTick + 1 })
@@ -240,49 +191,16 @@ export default function MapCanvas() {
     const {
       raster: r,
       activeLabel: lbl,
-      activeSubCategory: subCat,
       history: hist,
       editTarget: target,
       designabilityPaintValue: paintValue,
       designabilityMap: dMap,
-      subCategoryMap: scMap,
     } = useStore.getState()
     if (!r) return
     const rasterPts = pts.map(({ x, y }) => ({ x: toRasterPixel(x), y: toRasterPixel(y) }))
     const changed = target === 'designability'
       ? fillDesignability(dMap, r, rasterPts, paintValue, (idx) => !(layerSettings[r.data[idx]]?.locked))
       : fillPolygon(r, rasterPts, lbl, (oldLabel) => !(layerSettings[oldLabel]?.locked))
-    const hasSub = target === 'landuse' && scMap && hasSubCategories(lbl)
-    // 为主类改变的像素同步写入子类
-    if (hasSub) {
-      for (const item of changed) {
-        item.oldSub = scMap[item.idx]
-        item.subId = subCat
-        scMap[item.idx] = subCat
-      }
-    }
-    // 对已是同一主类但子类不同的像素，单独更新子类
-    if (hasSub && rasterPts.length >= 3) {
-      const xs = rasterPts.map(p => p.x)
-      const ys = rasterPts.map(p => p.y)
-      const cs = r.cellSize
-      const minCol = Math.max(0, Math.floor(Math.min(...xs) / cs))
-      const maxCol = Math.min(r.width - 1, Math.ceil(Math.max(...xs) / cs))
-      const minRow = Math.max(0, Math.floor(Math.min(...ys) / cs))
-      const maxRow = Math.min(r.height - 1, Math.ceil(Math.max(...ys) / cs))
-      for (let row = minRow; row <= maxRow; row++) {
-        for (let col = minCol; col <= maxCol; col++) {
-          const cx = (col + 0.5) * cs, cy = (row + 0.5) * cs
-          if (!pointInPolygon(cx, cy, rasterPts)) continue
-          const idx = row * r.width + col
-          if (r.data[idx] !== lbl) continue
-          if (scMap[idx] === subCat) continue
-          const oldSub = scMap[idx]
-          scMap[idx] = subCat
-          changed.push({ idx, old: lbl, labelId: lbl, oldSub, subId: subCat })
-        }
-      }
-    }
     if (changed.length > 0) {
       const command = target === 'designability'
         ? changedToDesignabilityCommand(changed, '可改多边形')
@@ -421,17 +339,31 @@ export default function MapCanvas() {
   const onDesignDrop = useCallback((e) => {
     const st = useStore.getState()
     if (!st.showDesignability) return
-    const designId = e.dataTransfer.getData('application/x-greenlens-design')
-    if (!designId) return
+    const raw = e.dataTransfer.getData('application/x-greenlens-design')
+    if (!raw) return
     e.preventDefault()
 
+    let design = null
+    try {
+      design = JSON.parse(raw)
+    } catch {
+      design = { id: raw, name: raw }
+    }
+
     const [px, py] = getCanvasPos(e)
-    const applied = applyQuickDesign(st, px, py, designId, layerSettings)
-    if (!applied) return
+    const result = applyQuickDesign(st, px, py, design?.id, layerSettings)
+    if (!result || result.changed.length === 0) return
+
     const { history: hist } = useStore.getState()
-    pushHistory(hist, changedToCommand(applied, `快速设计:${designId}`))
+    pushHistory(hist, changedToLanduseAndSubtypeCommand(result.changed, result.subtypeChanged, `快速设计:${design?.id || 'unknown'}`))
+    addQuickDesignMarker({
+      id: `m_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      name: design?.name || '功能',
+      x: Math.floor(px),
+      y: Math.floor(py),
+    })
     useStore.setState({ history: { ...hist }, renderTick: useStore.getState().renderTick + 1 })
-  }, [getCanvasPos, layerSettings])
+  }, [getCanvasPos, layerSettings, addQuickDesignMarker])
 
   const cursorStyle = editState.current.isPanning
     ? 'grabbing'
@@ -465,12 +397,39 @@ export default function MapCanvas() {
           onDragOver={onDesignDragOver}
           onDrop={onDesignDrop}
         />
+        {quickDesignMarkers.map((m) => (
+          <div
+            key={m.id}
+            style={{ ...styles.designMarker, left: `${m.x}px`, top: `${m.y}px` }}
+            onContextMenu={(e) => { e.preventDefault(); removeQuickDesignMarker(m.id) }}
+            title="右键删除标记"
+          >
+            {m.name}
+          </div>
+        ))}
       </div>
       <div style={styles.zoomBadge}>缩放 {Math.round(zoom * 100)}%</div>
     </div>
   )
 }
 
+
+
+function changedToLanduseAndSubtypeCommand(changed, subtypeChanged, label = '') {
+  return {
+    label,
+    redo(raster, _designabilityMap, greenSubtypeMap) {
+      for (const { idx, labelId } of changed) raster.data[idx] = labelId
+      if (!greenSubtypeMap) return
+      for (const { idx, value } of subtypeChanged) greenSubtypeMap[idx] = value
+    },
+    undo(raster, _designabilityMap, greenSubtypeMap) {
+      for (const { idx, old } of changed) raster.data[idx] = old
+      if (!greenSubtypeMap) return
+      for (const { idx, old } of subtypeChanged) greenSubtypeMap[idx] = old
+    },
+  }
+}
 
 function changedToDesignabilityCommand(changed, label = '') {
   return {
@@ -552,7 +511,7 @@ function pointInPolygon(x, y, polygon) {
 
 
 function applyQuickDesign(state, px, py, designId, layerSettings) {
-  const { raster, designabilityMap } = state
+  const { raster, designabilityMap, greenSubtypeMap } = state
   if (!raster || !designabilityMap) return null
   const col = Math.floor(px)
   const row = Math.floor(py)
@@ -564,27 +523,28 @@ function applyQuickDesign(state, px, py, designId, layerSettings) {
   if (region.length === 0) return null
 
   const changed = []
-  const minCol = region.reduce((m, idx) => Math.min(m, idx % raster.width), Infinity)
-  const minRow = region.reduce((m, idx) => Math.min(m, Math.floor(idx / raster.width)), Infinity)
-
-  const pocketParkGreenSet = designId === 'pocket_park'
-    ? computePocketParkGreenSet(region, state.distMap)
-    : null
+  const subtypeChanged = []
 
   for (const idx of region) {
     const old = raster.data[idx]
     if (layerSettings[old]?.locked) continue
-    const col0 = idx % raster.width
-    const row0 = Math.floor(idx / raster.width)
-    const relX = col0 - minCol
-    const relY = row0 - minRow
-    const labelId = pickQuickDesignLabel(designId, relX, relY, idx, pocketParkGreenSet)
-    if (labelId === old) continue
-    raster.data[idx] = labelId
-    changed.push({ idx, old, labelId })
+
+    const labelId = pickQuickDesignLabel(designId)
+    if (labelId !== old) {
+      raster.data[idx] = labelId
+      changed.push({ idx, old, labelId })
+    }
+
+    if (greenSubtypeMap) {
+      const oldSubtype = greenSubtypeMap[idx] ?? 0
+      if (labelId === 3 && oldSubtype !== PARK_GREEN_SUBTYPE_ID) {
+        greenSubtypeMap[idx] = PARK_GREEN_SUBTYPE_ID
+        subtypeChanged.push({ idx, old: oldSubtype, value: PARK_GREEN_SUBTYPE_ID })
+      }
+    }
   }
 
-  return changed
+  return { changed, subtypeChanged }
 }
 
 function floodDesignableRegion(width, height, map, startIdx) {
@@ -613,35 +573,9 @@ function floodDesignableRegion(width, height, map, startIdx) {
   return out
 }
 
-function pickQuickDesignLabel(designId, x, y, idx, pocketParkGreenSet) {
-  // 3=绿地/植被, 8=硬质铺装
-  if (designId === 'pocket_park') {
-    if (pocketParkGreenSet?.has(idx)) return 3
-    return 8
-  }
-  if (designId === 'civic_plaza') {
-    return ((x + y) % 7 <= 1) ? 3 : 8
-  }
-  if (designId === 'urban_forest') {
-    return ((x % 10 === 0) && (y % 3 === 0)) ? 8 : 3
-  }
+function pickQuickDesignLabel(_designId) {
+  // 当前功能拖拽统一落为绿地，二级分类由调用方写为“公园绿地”
   return 3
-}
-
-function computePocketParkGreenSet(region, distMap) {
-  if (!Array.isArray(region) || region.length === 0) return new Set()
-  if (!distMap) return new Set(region.filter((_, i) => i % 3 === 0))
-
-  const sortable = region.map((idx) => ({ idx, d: distMap[idx] ?? -1 }))
-  sortable.sort((a, b) => b.d - a.d)
-
-  const pickCount = Math.max(1, Math.ceil(sortable.length * 0.3))
-  const set = new Set()
-  for (let i = 0; i < pickCount; i++) {
-    const { idx } = sortable[i]
-    set.add(idx)
-  }
-  return set
 }
 
 const styles = {
@@ -668,6 +602,20 @@ const styles = {
   overlay: {
     pointerEvents: 'all',
     background: 'transparent',
+  },
+  designMarker: {
+    position: 'absolute',
+    transform: 'translate(-50%, -110%)',
+    background: '#16a34acc',
+    color: '#f0fdf4',
+    border: '1px solid #14532d',
+    borderRadius: '999px',
+    padding: '2px 8px',
+    fontSize: '10px',
+    whiteSpace: 'nowrap',
+    cursor: 'context-menu',
+    userSelect: 'none',
+    pointerEvents: 'auto',
   },
   zoomBadge: {
     position: 'absolute',

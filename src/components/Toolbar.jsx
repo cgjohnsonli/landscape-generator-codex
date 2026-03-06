@@ -1,5 +1,5 @@
 import { useStore } from '../store/useStore.js'
-import { LABELS, ACTIVE_LABELS, hasSubCategories, getSubCategories, getSubCategoryColor } from '../core/raster.js'
+import { LABELS } from '../core/raster.js'
 import { buildProjectSnapshot, downloadProjectFile } from '../core/projectFile.js'
 import { greenServiceDistance, roadServiceDistance, coverageStats, generateSuggestions, generateRoadSuggestions } from '../core/analysis.js'
 
@@ -15,9 +15,21 @@ const TOOLS = [
 ]
 
 const QUICK_DESIGNS = [
-  { id: 'pocket_park', name: '口袋公园' },
-  { id: 'civic_plaza', name: '市民广场' },
-  { id: 'urban_forest', name: '城市森林' },
+  { id: 'comprehensive_park', name: '综合公园' },
+  { id: 'community_park', name: '社区公园' },
+  { id: 'zoo', name: '动物园' },
+  { id: 'botanical_garden', name: '植物园' },
+  { id: 'historic_garden', name: '历史名园' },
+  { id: 'heritage_park', name: '遗址公园' },
+  { id: 'amusement_park', name: '游乐公园' },
+  { id: 'children_park', name: '儿童公园' },
+  { id: 'sports_fitness_park', name: '体育健身公园' },
+  { id: 'waterfront_park', name: '滨水公园' },
+  { id: 'cultural_park', name: '文化公园' },
+  { id: 'scenic_park', name: '风景名胜公园' },
+  { id: 'wetland_park', name: '湿地公园' },
+  { id: 'forest_park', name: '森林公园' },
+  { id: 'garden', name: '游园' },
 ]
 
 export default function Toolbar() {
@@ -237,7 +249,7 @@ export default function Toolbar() {
               draggable={showDesignability}
               onDragStart={(e) => {
                 if (!showDesignability) return
-                e.dataTransfer.setData('application/x-greenlens-design', d.id)
+                e.dataTransfer.setData('application/x-greenlens-design', JSON.stringify(d))
                 e.dataTransfer.effectAllowed = 'copy'
               }}
               style={{ ...styles.quickItem, ...(showDesignability ? null : styles.quickItemDisabled) }}
@@ -258,7 +270,8 @@ export default function Toolbar() {
 }
 
 function LabelQuickPicker() {
-  const { activeLabel, setActiveLabel, activeSubCategory, selectSubCategory } = useStore()
+  const { activeLabel, setActiveLabel } = useStore()
+  const visible = LABELS.slice(0, 12)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
       {ACTIVE_LABELS.map(l => (

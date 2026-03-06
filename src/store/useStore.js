@@ -25,7 +25,8 @@ export const useStore = create((set, get) => ({
   // ── 点阵 ──
   raster: null,            // RasterGrid
   designabilityMap: null,  // Uint8Array: 0=不可改,1=可改
-  subCategoryMap: null,    // Uint8Array: 子类 ID（含义取决于主类）
+  greenSubtypeMap: null,   // Uint8Array: 绿地二级分类
+  quickDesignMarkers: [],
   renderTick: 0,           // 用于触发 canvas 重绘
 
   // ── 编辑工具 ──
@@ -65,7 +66,8 @@ export const useStore = create((set, get) => ({
   setRaster: (raster) => set({
     raster,
     designabilityMap: raster ? new Uint8Array(raster.width * raster.height) : null,
-    subCategoryMap: raster ? new Uint8Array(raster.width * raster.height) : null,
+    greenSubtypeMap: raster ? new Uint8Array(raster.width * raster.height) : null,
+    quickDesignMarkers: [],
     history: createHistory(),
     renderTick: get().renderTick + 1,
   }),
@@ -95,7 +97,14 @@ export const useStore = create((set, get) => ({
   setDesignabilityPaintValue: (v) => set({ designabilityPaintValue: v }),
   setShowDesignability: (v) => set({ showDesignability: v }),
   setDesignabilityMap: (map) => set({ designabilityMap: map, renderTick: get().renderTick + 1 }),
-  loadProjectData: ({ imageName, raster, designabilityMap, layerSettings, subCategoryMap }) => set({
+  setGreenSubtypeMap: (map) => set({ greenSubtypeMap: map, renderTick: get().renderTick + 1 }),
+  addQuickDesignMarker: (marker) => set((state) => ({
+    quickDesignMarkers: [...state.quickDesignMarkers, marker],
+  })),
+  removeQuickDesignMarker: (id) => set((state) => ({
+    quickDesignMarkers: state.quickDesignMarkers.filter((m) => m.id !== id),
+  })),
+  loadProjectData: ({ imageName, raster, designabilityMap, greenSubtypeMap, quickDesignMarkers, layerSettings }) => set({
     imageName: imageName || '',
     sourceImage: null,
     imageData: null,
@@ -103,7 +112,8 @@ export const useStore = create((set, get) => ({
     clusterToLabel: [],
     raster,
     designabilityMap: designabilityMap ?? new Uint8Array(raster.width * raster.height),
-    subCategoryMap: subCategoryMap ?? new Uint8Array(raster.width * raster.height),
+    greenSubtypeMap: greenSubtypeMap ?? new Uint8Array(raster.width * raster.height),
+    quickDesignMarkers: quickDesignMarkers ?? [],
     layerSettings: layerSettings ?? createDefaultLayers(),
     showAnalysis: false,
     distMap: null,
@@ -111,8 +121,6 @@ export const useStore = create((set, get) => ({
     suggestions: null,
     history: createHistory(),
     activePanel: 'label',
-    activeSubCategory: 0,
-    showSubCategories: false,
     renderTick: get().renderTick + 1,
   }),
   setActivePanel: (p) => set({ activePanel: p }),
@@ -161,12 +169,12 @@ export const useStore = create((set, get) => ({
   },
 
   undo() {
-    const { history, raster, designabilityMap, subCategoryMap } = get()
-    if (undo(history, raster, designabilityMap, subCategoryMap)) set({ history: { ...history }, renderTick: get().renderTick + 1 })
+    const { history, raster, designabilityMap, greenSubtypeMap } = get()
+    if (undo(history, raster, designabilityMap, greenSubtypeMap)) set({ history: { ...history }, renderTick: get().renderTick + 1 })
   },
   redo() {
-    const { history, raster, designabilityMap, subCategoryMap } = get()
-    if (redo(history, raster, designabilityMap, subCategoryMap)) set({ history: { ...history }, renderTick: get().renderTick + 1 })
+    const { history, raster, designabilityMap, greenSubtypeMap } = get()
+    if (redo(history, raster, designabilityMap, greenSubtypeMap)) set({ history: { ...history }, renderTick: get().renderTick + 1 })
   },
   canUndo: () => canUndo(get().history),
   canRedo: () => canRedo(get().history),

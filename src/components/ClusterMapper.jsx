@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react'
 import { useStore } from '../store/useStore.js'
-import { LABELS, ACTIVE_LABELS, buildRasterFromClusters, hasSubCategories, getSubCategories } from '../core/raster.js'
+import { LABELS, buildRasterFromClusters } from '../core/raster.js'
 import { rgbToHex } from '../core/kmeans.js'
 
 export default function ClusterMapper() {
@@ -16,6 +16,43 @@ export default function ClusterMapper() {
   const [subMapping, setSubMapping] = React.useState(() =>
     clusters ? clusters.centers.map(() => 0) : []
   )
+
+  const previewRaster = useMemo(() => {
+    if (!clusters || !imageData) return null
+    return buildRasterFromClusters(imageData.width, imageData.height, clusters.assignments, mapping, 2)
+  }, [clusters, imageData, mapping])
+
+  useEffect(() => {
+    if (!previewRaster) return
+    const canvas = previewCanvasRef.current
+    if (!canvas) return
+
+    canvas.width = previewRaster.width
+    canvas.height = previewRaster.height
+    const ctx = canvas.getContext('2d')
+
+    const imgData = new ImageData(previewRaster.width, previewRaster.height)
+    const { data } = imgData
+
+    for (let i = 0; i < previewRaster.data.length; i++) {
+      const labelId = previewRaster.data[i]
+      const [r, g, b] = LABELS[labelId]?.rgb ?? [100, 116, 139]
+      const base = i * 4
+      data[base] = r
+      data[base + 1] = g
+      data[base + 2] = b
+      data[base + 3] = 255
+    }
+
+    ctx.putImageData(imgData, 0, 0)
+
+    // 叠加原图，方便用户理解映射结果落在什么区域
+    if (sourceImage) {
+      ctx.globalAlpha = 0.35
+      ctx.drawImage(sourceImage, 0, 0, previewRaster.width, previewRaster.height)
+      ctx.globalAlpha = 1
+    }
+  }, [previewRaster, sourceImage])
 
   const previewRaster = useMemo(() => {
     if (!clusters || !imageData) return null
@@ -77,21 +114,6 @@ export default function ClusterMapper() {
 
       setClusterToLabel(mapping)
       setRaster(nextRaster)
-
-      // 子类映射模式下，根据聚类分配生成 subCategoryMap
-      if (mappingMode === 'subcategory') {
-        const scMap = new Uint8Array(nextRaster.width * nextRaster.height)
-        for (let row = 0; row < nextRaster.height; row++) {
-          for (let col = 0; col < nextRaster.width; col++) {
-            const px = Math.min(col * 2, imageData.width - 1)
-            const py = Math.min(row * 2, imageData.height - 1)
-            const pixelIdx = py * imageData.width + px
-            const clusterId = clusters.assignments[pixelIdx]
-            scMap[row * nextRaster.width + col] = subMapping[clusterId] ?? 0
-          }
-        }
-        useStore.setState({ subCategoryMap: scMap })
-      }
     } catch (e) {
       alert(`建立底图失败：${e.message || '未知错误'}`)
     } finally {
@@ -158,21 +180,6 @@ export default function ClusterMapper() {
                   </option>
                 ))}
               </select>
-              {mappingMode === 'subcategory' && hasSubCategories(mapping[i]) && (
-                <select
-                  style={{ ...styles.select, maxWidth: '90px' }}
-                  value={subMapping[i] ?? 0}
-                  onChange={(e) => {
-                    const next = [...subMapping]
-                    next[i] = parseInt(e.target.value)
-                    setSubMapping(next)
-                  }}
-                >
-                  {getSubCategories(mapping[i]).map(sc => (
-                    <option key={sc.subId} value={sc.subId}>{sc.name}</option>
-                  ))}
-                </select>
-              )}
               <div style={{ ...styles.labelDot, background: LABELS[mapping[i] ?? 0]?.color }} />
             </div>
           ))}
@@ -189,14 +196,19 @@ export default function ClusterMapper() {
 }
 
 function guessLabel([r, g, b]) {
-  let best = [0, 9999]
-  for (const l of ACTIVE_LABELS) {
-    if (l.id === 0) continue // 跳过未分类
-    const [lr, lg, lb] = l.rgb
-    const dist = Math.abs(r - lr) + Math.abs(g - lg) + Math.abs(b - lb)
-    if (dist < best[1]) best = [l.id, dist]
-  }
-  return best[0]
+  const scores = [
+    [0, 0],
+    [1, Math.abs(r - 217) + Math.abs(g - 119) + Math.abs(b - 6)],
+    [2, Math.abs(r - 107) + Math.abs(g - 114) + Math.abs(b - 128)],
+    [3, Math.abs(r - 22) + Math.abs(g - 163) + Math.abs(b - 74)],
+    [4, Math.abs(r - 37) + Math.abs(g - 99) + Math.abs(b - 235)],
+    [5, Math.abs(r - 202) + Math.abs(g - 138) + Math.abs(b - 4)],
+    [6, Math.abs(r - 180) + Math.abs(g - 83) + Math.abs(b - 9)],
+    [7, Math.abs(r - 124) + Math.abs(g - 58) + Math.abs(b - 237)],
+    [8, Math.abs(r - 156) + Math.abs(g - 163) + Math.abs(b - 175)],
+  ]
+  scores[0][1] = 9999
+  return scores.reduce((best, cur) => (cur[1] < best[1] ? cur : best))[0]
 }
 
 const styles = {

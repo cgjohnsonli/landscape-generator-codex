@@ -1,5 +1,6 @@
 import { useStore } from '../store/useStore.js'
-import { LABELS, ACTIVE_LABELS, computeStats, computeSubCategoryStats, hasSubCategories, getSubCategories, getSubCategoryColor } from '../core/raster.js'
+import { LABELS, computeStats } from '../core/raster.js'
+import { GREEN_SUBTYPES } from '../core/greenSubtype.js'
 
 const TABS = [
   { id: 'label', label: '图例' },
@@ -49,11 +50,9 @@ export default function SidePanel() {
 function LabelPanel() {
   const {
     layerSettings,
-    designabilityMap,
+    designabilityMap, greenSubtypeMap,
     showDesignability,
     setShowDesignability,
-    showSubCategories,
-    setShowSubCategories,
     toggleLayerVisibility,
     toggleLayerLock,
     toggleOtherLayerVisibility,
@@ -63,6 +62,11 @@ function LabelPanel() {
   const designableCount = designabilityMap?.reduce((acc, v) => acc + (v === 1 ? 1 : 0), 0) ?? 0
   const totalCells = raster?.data?.length ?? 0
   const designablePct = totalCells > 0 ? ((designableCount / totalCells) * 100).toFixed(1) : '0.0'
+
+  const greenSubtypeCounts = GREEN_SUBTYPES.map((st) => ({
+    ...st,
+    count: greenSubtypeMap?.reduce((acc, v) => acc + (v === st.id ? 1 : 0), 0) ?? 0,
+  })).filter((x) => x.id !== 0)
   return (
     <div>
       <div style={styles.sectionTitle}>更新设计属性</div>
@@ -74,47 +78,41 @@ function LabelPanel() {
       </button>
       <div style={styles.designMeta}>可更新：{designableCount} / {totalCells}（{designablePct}%）</div>
 
-      <button
-        style={{ ...styles.toggleBtn, ...(showSubCategories ? styles.toggleBtnSub : {}) }}
-        onClick={() => setShowSubCategories(!showSubCategories)}
-      >
-        {showSubCategories ? '✅ 显示子类颜色' : '◻ 显示子类颜色'}
-      </button>
+
+      <div style={{ marginBottom: '12px' }}>
+        <div style={styles.sectionTitle}>绿地二级分类</div>
+        {greenSubtypeCounts.map((it) => (
+          <div key={it.id} style={styles.subtypeRow}>
+            <span>{it.name}</span>
+            <span style={styles.subtypeCount}>{it.count}</span>
+          </div>
+        ))}
+      </div>
 
       <div style={styles.sectionTitle}>用地类型图例</div>
-      {ACTIVE_LABELS.map(l => {
+      {LABELS.map(l => {
         const layer = layerSettings[l.id] ?? { visible: true, locked: false }
         return (
-          <div key={l.id}>
-            <div style={styles.legendRow}>
-              <div style={{ ...styles.legendSwatch, background: l.color, opacity: layer.visible ? 1 : 0.35 }} />
-              <span style={{ ...styles.legendText, opacity: layer.visible ? 1 : 0.5 }}>{l.name}</span>
-              <button
-                style={{ ...styles.layerBtn, ...(layer.visible ? styles.layerBtnOn : {}) }}
-                onClick={() => toggleLayerVisibility(l.id)}
-                onContextMenu={(e) => { e.preventDefault(); toggleOtherLayerVisibility(l.id) }}
-                title="左键：切换当前图层可见性；右键：切换其他图层可见性"
-              >
-                {layer.visible ? '👁' : '🚫'}
-              </button>
-              <button
-                style={{ ...styles.layerBtn, ...(layer.locked ? styles.layerBtnOn : {}) }}
-                onClick={() => toggleLayerLock(l.id)}
-                onContextMenu={(e) => { e.preventDefault(); toggleOtherLayerLock(l.id) }}
-                title="左键：切换当前图层锁定；右键：切换其他图层锁定"
-              >
-                {layer.locked ? '🔒' : '🔓'}
-              </button>
-              <span style={styles.legendId}>#{l.id}</span>
-            </div>
-            {showSubCategories && hasSubCategories(l.id) && (
-              getSubCategories(l.id).map(sc => (
-                <div key={sc.subId} style={{ ...styles.legendRow, paddingLeft: '20px' }}>
-                  <div style={{ ...styles.legendSwatch, width: '8px', height: '8px', background: getSubCategoryColor(l.id, sc.subId), opacity: layer.visible ? 1 : 0.35 }} />
-                  <span style={{ ...styles.legendText, fontSize: '10px', opacity: layer.visible ? 1 : 0.5 }}>{sc.name}</span>
-                </div>
-              ))
-            )}
+          <div key={l.id} style={styles.legendRow}>
+            <div style={{ ...styles.legendSwatch, background: l.color, opacity: layer.visible ? 1 : 0.35 }} />
+            <span style={{ ...styles.legendText, opacity: layer.visible ? 1 : 0.5 }}>{l.name}</span>
+            <button
+              style={{ ...styles.layerBtn, ...(layer.visible ? styles.layerBtnOn : {}) }}
+              onClick={() => toggleLayerVisibility(l.id)}
+              onContextMenu={(e) => { e.preventDefault(); toggleOtherLayerVisibility(l.id) }}
+              title="左键：切换当前图层可见性；右键：切换其他图层可见性"
+            >
+              {layer.visible ? '👁' : '🚫'}
+            </button>
+            <button
+              style={{ ...styles.layerBtn, ...(layer.locked ? styles.layerBtnOn : {}) }}
+              onClick={() => toggleLayerLock(l.id)}
+              onContextMenu={(e) => { e.preventDefault(); toggleOtherLayerLock(l.id) }}
+              title="左键：切换当前图层锁定；右键：切换其他图层锁定"
+            >
+              {layer.locked ? '🔒' : '🔓'}
+            </button>
+            <span style={styles.legendId}>#{l.id}</span>
           </div>
         )
       })}
@@ -352,12 +350,9 @@ const styles = {
     color: '#fecaca',
     background: '#7f1d1d33',
   },
-  toggleBtnSub: {
-    borderColor: '#22c55e',
-    color: '#bbf7d0',
-    background: '#14532d33',
-  },
   designMeta: { fontSize: '10px', color: '#64748b', marginBottom: '12px', fontFamily: "'DM Mono', monospace" },
+  subtypeRow: { display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#94a3b8', marginBottom: '4px' },
+  subtypeCount: { color: '#cbd5e1', fontFamily: "'DM Mono', monospace" },
   bandRow: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' },
   bandDot: { width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0 },
   bandLabel: { flex: 1, fontSize: '10px', color: '#94a3b8' },

@@ -10,7 +10,7 @@ export const LABELS = [
   { id: 0, name: '未分类',     color: '#64748b', rgb: [100, 116, 139] },
   { id: 1, name: '建筑',       color: '#d97706', rgb: [217, 119,   6] },
   { id: 2, name: '道路',       color: '#6b7280', rgb: [107, 114, 128] },
-  { id: 3, name: '绿地/植被',  color: '#16a34a', rgb: [ 22, 163,  74] },
+  { id: 3, name: '绿地',       color: '#16a34a', rgb: [ 22, 163,  74] },
   { id: 4, name: '水体',       color: '#2563eb', rgb: [ 37,  99, 235] },
   { id: 5, name: '农田',       color: '#ca8a04', rgb: [202, 138,   4], deprecated: true },
   { id: 6, name: '裸地',       color: '#b45309', rgb: [180,  83,   9] },
