@@ -32,6 +32,8 @@ export const useStore = create((set, get) => ({
   // ── 编辑工具 ──
   activeTool: 'brush',     // 'brush' | 'polygon' | 'pan'
   activeLabel: 3,          // 当前绘制标签（默认绿地）
+  activeSubCategory: 0,    // 当前绘制子类 ID
+  showSubCategories: false, // 是否用子类颜色渲染
   brushRadius: 20,         // 像素半径
   opacity: 0.85,           // 叠加层透明度
   editTarget: 'landuse',   // 'landuse' | 'designability'
@@ -76,7 +78,23 @@ export const useStore = create((set, get) => ({
   triggerRender: () => set({ renderTick: get().renderTick + 1 }),
 
   setActiveTool: (t) => set({ activeTool: t }),
-  setActiveLabel: (id) => set({ activeLabel: id }),
+  setActiveLabel: (id) => set({ activeLabel: id, activeSubCategory: 0 }),
+  setActiveSubCategory: (id) => set({ activeSubCategory: id }),
+  setShowSubCategories: (v) => set({ showSubCategories: v, renderTick: get().renderTick + 1 }),
+  selectSubCategory: (labelId, subCatId) => set((state) => {
+    const next = { ...state.layerSettings }
+    for (const key of Object.keys(next)) {
+      const lid = Number(key)
+      next[lid] = { ...next[lid], locked: lid !== labelId }
+    }
+    return {
+      activeLabel: labelId,
+      activeSubCategory: subCatId,
+      showSubCategories: true,
+      layerSettings: next,
+      renderTick: state.renderTick + 1,
+    }
+  }),
   setBrushRadius: (r) => set({ brushRadius: r }),
   setOpacity: (v) => set({ opacity: v }),
   setEditTarget: (v) => set({ editTarget: v }),
