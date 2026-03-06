@@ -1,9 +1,10 @@
-export const PROJECT_FILE_VERSION = 1
+export const PROJECT_FILE_VERSION = 2
 
 export function buildProjectSnapshot(state) {
-  const { raster, designabilityMap, layerSettings, imageName } = state
+  const { raster, designabilityMap, subCategoryMap, layerSettings, imageName } = state
   if (!raster) throw new Error('当前无可保存的底图数据')
 
+  const size = raster.width * raster.height
   return {
     type: 'greenlens-project',
     version: PROJECT_FILE_VERSION,
@@ -15,7 +16,8 @@ export function buildProjectSnapshot(state) {
       cellSize: raster.cellSize,
       data: Array.from(raster.data),
     },
-    designabilityMap: Array.from(designabilityMap ?? new Uint8Array(raster.width * raster.height)),
+    designabilityMap: Array.from(designabilityMap ?? new Uint8Array(size)),
+    subCategoryMap: Array.from(subCategoryMap ?? new Uint8Array(size)),
     layerSettings,
   }
 }
@@ -61,6 +63,11 @@ export async function readProjectFile(file) {
     throw new Error(`designabilityMap 数据长度错误：期望 ${expected}，实际 ${designabilityMapRaw.length}`)
   }
 
+  // v1 项目文件无 subCategoryMap，向后兼容：创建零填充数组
+  const subCategoryMapRaw = Array.isArray(parsed.subCategoryMap) && parsed.subCategoryMap.length === expected
+    ? parsed.subCategoryMap
+    : new Array(expected).fill(0)
+
   return {
     imageName: parsed.imageName || file.name,
     raster: {
@@ -70,6 +77,7 @@ export async function readProjectFile(file) {
       data: Uint8Array.from(data),
     },
     designabilityMap: Uint8Array.from(designabilityMapRaw),
+    subCategoryMap: Uint8Array.from(subCategoryMapRaw),
     layerSettings: parsed.layerSettings,
   }
 }

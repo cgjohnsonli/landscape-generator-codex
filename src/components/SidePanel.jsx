@@ -1,5 +1,5 @@
 import { useStore } from '../store/useStore.js'
-import { LABELS, computeStats } from '../core/raster.js'
+import { LABELS, ACTIVE_LABELS, computeStats, computeSubCategoryStats, hasSubCategories, getSubCategories, getSubCategoryColor } from '../core/raster.js'
 
 const TABS = [
   { id: 'label', label: '图例' },
@@ -52,6 +52,8 @@ function LabelPanel() {
     designabilityMap,
     showDesignability,
     setShowDesignability,
+    showSubCategories,
+    setShowSubCategories,
     toggleLayerVisibility,
     toggleLayerLock,
     toggleOtherLayerVisibility,
@@ -72,30 +74,47 @@ function LabelPanel() {
       </button>
       <div style={styles.designMeta}>可更新：{designableCount} / {totalCells}（{designablePct}%）</div>
 
+      <button
+        style={{ ...styles.toggleBtn, ...(showSubCategories ? styles.toggleBtnSub : {}) }}
+        onClick={() => setShowSubCategories(!showSubCategories)}
+      >
+        {showSubCategories ? '✅ 显示子类颜色' : '◻ 显示子类颜色'}
+      </button>
+
       <div style={styles.sectionTitle}>用地类型图例</div>
-      {LABELS.map(l => {
+      {ACTIVE_LABELS.map(l => {
         const layer = layerSettings[l.id] ?? { visible: true, locked: false }
         return (
-          <div key={l.id} style={styles.legendRow}>
-            <div style={{ ...styles.legendSwatch, background: l.color, opacity: layer.visible ? 1 : 0.35 }} />
-            <span style={{ ...styles.legendText, opacity: layer.visible ? 1 : 0.5 }}>{l.name}</span>
-            <button
-              style={{ ...styles.layerBtn, ...(layer.visible ? styles.layerBtnOn : {}) }}
-              onClick={() => toggleLayerVisibility(l.id)}
-              onContextMenu={(e) => { e.preventDefault(); toggleOtherLayerVisibility(l.id) }}
-              title="左键：切换当前图层可见性；右键：切换其他图层可见性"
-            >
-              {layer.visible ? '👁' : '🚫'}
-            </button>
-            <button
-              style={{ ...styles.layerBtn, ...(layer.locked ? styles.layerBtnOn : {}) }}
-              onClick={() => toggleLayerLock(l.id)}
-              onContextMenu={(e) => { e.preventDefault(); toggleOtherLayerLock(l.id) }}
-              title="左键：切换当前图层锁定；右键：切换其他图层锁定"
-            >
-              {layer.locked ? '🔒' : '🔓'}
-            </button>
-            <span style={styles.legendId}>#{l.id}</span>
+          <div key={l.id}>
+            <div style={styles.legendRow}>
+              <div style={{ ...styles.legendSwatch, background: l.color, opacity: layer.visible ? 1 : 0.35 }} />
+              <span style={{ ...styles.legendText, opacity: layer.visible ? 1 : 0.5 }}>{l.name}</span>
+              <button
+                style={{ ...styles.layerBtn, ...(layer.visible ? styles.layerBtnOn : {}) }}
+                onClick={() => toggleLayerVisibility(l.id)}
+                onContextMenu={(e) => { e.preventDefault(); toggleOtherLayerVisibility(l.id) }}
+                title="左键：切换当前图层可见性；右键：切换其他图层可见性"
+              >
+                {layer.visible ? '👁' : '🚫'}
+              </button>
+              <button
+                style={{ ...styles.layerBtn, ...(layer.locked ? styles.layerBtnOn : {}) }}
+                onClick={() => toggleLayerLock(l.id)}
+                onContextMenu={(e) => { e.preventDefault(); toggleOtherLayerLock(l.id) }}
+                title="左键：切换当前图层锁定；右键：切换其他图层锁定"
+              >
+                {layer.locked ? '🔒' : '🔓'}
+              </button>
+              <span style={styles.legendId}>#{l.id}</span>
+            </div>
+            {showSubCategories && hasSubCategories(l.id) && (
+              getSubCategories(l.id).map(sc => (
+                <div key={sc.subId} style={{ ...styles.legendRow, paddingLeft: '20px' }}>
+                  <div style={{ ...styles.legendSwatch, width: '8px', height: '8px', background: getSubCategoryColor(l.id, sc.subId), opacity: layer.visible ? 1 : 0.35 }} />
+                  <span style={{ ...styles.legendText, fontSize: '10px', opacity: layer.visible ? 1 : 0.5 }}>{sc.name}</span>
+                </div>
+              ))
+            )}
           </div>
         )
       })}
@@ -113,28 +132,50 @@ function LabelPanel() {
 }
 
 function StatsPanel({ raster }) {
+  const { subCategoryMap } = useStore()
   if (!raster) return <div style={styles.empty}>暂无数据</div>
   const stats = computeStats(raster)
+  const subStats = computeSubCategoryStats(raster, subCategoryMap)
   const cellArea = (raster.cellSize ** 2)
+  const total = raster.width * raster.height
   return (
     <div>
       <div style={styles.sectionTitle}>用地面积统计</div>
       <div style={styles.statsMeta}>
         栅格: {raster.width}×{raster.height} &nbsp;|&nbsp; 格元: {raster.cellSize}m
       </div>
-      {stats.filter(s => s.cells > 0).map(s => (
-        <div key={s.id} style={styles.statRow}>
-          <div style={styles.statHeader}>
-            <div style={{ ...styles.statDot, background: s.color }} />
-            <span style={styles.statName}>{s.name}</span>
-            <span style={styles.statPct}>{s.percent}%</span>
+      {stats.filter(s => s.cells > 0 && !LABELS[s.id]?.deprecated).map(s => (
+        <div key={s.id}>
+          <div style={styles.statRow}>
+            <div style={styles.statHeader}>
+              <div style={{ ...styles.statDot, background: s.color }} />
+              <span style={styles.statName}>{s.name}</span>
+              <span style={styles.statPct}>{s.percent}%</span>
+            </div>
+            <div style={styles.barTrack}>
+              <div style={{ ...styles.barFill, width: `${s.percent}%`, background: s.color }} />
+            </div>
+            <div style={styles.statArea}>
+              {(s.cells * cellArea / 1e4).toFixed(2)} hm²
+            </div>
           </div>
-          <div style={styles.barTrack}>
-            <div style={{ ...styles.barFill, width: `${s.percent}%`, background: s.color }} />
-          </div>
-          <div style={styles.statArea}>
-            {(s.cells * cellArea / 1e4).toFixed(2)} hm²
-          </div>
+          {subStats[s.id] && Object.entries(subStats[s.id]).map(([subId, count]) => {
+            const sub = getSubCategories(s.id).find(sc => sc.subId === Number(subId))
+            if (!sub) return null
+            const subPct = total > 0 ? ((count / total) * 100).toFixed(1) : '0.0'
+            return (
+              <div key={subId} style={{ ...styles.statRow, paddingLeft: '16px', marginBottom: '6px' }}>
+                <div style={styles.statHeader}>
+                  <div style={{ ...styles.statDot, width: '6px', height: '6px', background: getSubCategoryColor(s.id, Number(subId)) }} />
+                  <span style={{ ...styles.statName, fontSize: '10px' }}>{sub.name}</span>
+                  <span style={styles.statPct}>{subPct}%</span>
+                </div>
+                <div style={styles.barTrack}>
+                  <div style={{ ...styles.barFill, width: `${subPct}%`, background: getSubCategoryColor(s.id, Number(subId)) }} />
+                </div>
+              </div>
+            )
+          })}
         </div>
       ))}
     </div>
@@ -310,6 +351,11 @@ const styles = {
     borderColor: '#ef4444',
     color: '#fecaca',
     background: '#7f1d1d33',
+  },
+  toggleBtnSub: {
+    borderColor: '#22c55e',
+    color: '#bbf7d0',
+    background: '#14532d33',
   },
   designMeta: { fontSize: '10px', color: '#64748b', marginBottom: '12px', fontFamily: "'DM Mono', monospace" },
   bandRow: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' },

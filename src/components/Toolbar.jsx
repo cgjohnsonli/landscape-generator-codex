@@ -1,5 +1,5 @@
 import { useStore } from '../store/useStore.js'
-import { LABELS } from '../core/raster.js'
+import { LABELS, ACTIVE_LABELS, hasSubCategories, getSubCategories, getSubCategoryColor } from '../core/raster.js'
 import { buildProjectSnapshot, downloadProjectFile } from '../core/projectFile.js'
 import { greenServiceDistance, roadServiceDistance, coverageStats, generateSuggestions, generateRoadSuggestions } from '../core/analysis.js'
 
@@ -15,9 +15,21 @@ const TOOLS = [
 ]
 
 const QUICK_DESIGNS = [
-  { id: 'pocket_park', name: '口袋公园' },
-  { id: 'civic_plaza', name: '市民广场' },
-  { id: 'urban_forest', name: '城市森林' },
+  { id: 'park_comprehensive', name: '综合公园' },
+  { id: 'park_community',     name: '社区公园' },
+  { id: 'park_zoo',           name: '动物园' },
+  { id: 'park_botanical',     name: '植物园' },
+  { id: 'park_historic',      name: '历史名园' },
+  { id: 'park_relic',         name: '遗址公园' },
+  { id: 'park_amusement',     name: '游乐公园' },
+  { id: 'park_children',      name: '儿童公园' },
+  { id: 'park_sports',        name: '体育健身公园' },
+  { id: 'park_waterfront',    name: '滨水公园' },
+  { id: 'park_culture',       name: '文化公园' },
+  { id: 'park_scenic',        name: '风景名胜公园' },
+  { id: 'park_wetland',       name: '湿地公园' },
+  { id: 'park_forest',        name: '森林公园' },
+  { id: 'park_pocket',        name: '游园' },
 ]
 
 export default function Toolbar() {
@@ -237,7 +249,7 @@ export default function Toolbar() {
               draggable={showDesignability}
               onDragStart={(e) => {
                 if (!showDesignability) return
-                e.dataTransfer.setData('application/x-greenlens-design', d.id)
+                e.dataTransfer.setData('application/x-greenlens-design', JSON.stringify({ id: d.id, name: d.name }))
                 e.dataTransfer.effectAllowed = 'copy'
               }}
               style={{ ...styles.quickItem, ...(showDesignability ? null : styles.quickItemDisabled) }}
@@ -258,23 +270,47 @@ export default function Toolbar() {
 }
 
 function LabelQuickPicker() {
-  const { activeLabel, setActiveLabel } = useStore()
-  const visible = LABELS.slice(0, 12)
+  const { activeLabel, setActiveLabel, activeSubCategory, selectSubCategory } = useStore()
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-      {visible.map(l => (
-        <button
-          key={l.id}
-          style={{
-            ...styles.labelChip,
-            borderColor: activeLabel === l.id ? l.color : 'transparent',
-            background: activeLabel === l.id ? l.color + '22' : 'transparent',
-          }}
-          onClick={() => setActiveLabel(l.id)}
-        >
-          <span style={{ ...styles.labelDot, background: l.color }} />
-          <span style={styles.labelName}>{l.name}</span>
-        </button>
+      {ACTIVE_LABELS.map(l => (
+        <div key={l.id}>
+          <button
+            style={{
+              ...styles.labelChip,
+              borderColor: activeLabel === l.id ? l.color : 'transparent',
+              background: activeLabel === l.id ? l.color + '22' : 'transparent',
+            }}
+            onClick={() => setActiveLabel(l.id)}
+          >
+            <span style={{ ...styles.labelDot, background: l.color }} />
+            <span style={styles.labelName}>{l.name}</span>
+          </button>
+          {activeLabel === l.id && hasSubCategories(l.id) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
+              {getSubCategories(l.id).map(sc => {
+                const scColor = getSubCategoryColor(l.id, sc.subId)
+                const isActive = activeSubCategory === sc.subId
+                return (
+                  <button
+                    key={sc.subId}
+                    style={{
+                      ...styles.labelChip,
+                      paddingLeft: '18px',
+                      fontSize: '10px',
+                      borderColor: isActive ? scColor : 'transparent',
+                      background: isActive ? scColor + '22' : 'transparent',
+                    }}
+                    onClick={() => selectSubCategory(l.id, sc.subId)}
+                  >
+                    <span style={{ ...styles.labelDot, width: '6px', height: '6px', background: scColor }} />
+                    <span style={styles.labelName}>{sc.name}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
       ))}
     </div>
   )
