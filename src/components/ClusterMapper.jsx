@@ -12,6 +12,195 @@ export default function ClusterMapper() {
     if (!clusters) return []
     return clusters.centers.map(center => guessLabel(center))
   })
+  const [mappingMode, setMappingMode] = React.useState('primary') // 'primary' | 'subcategory'
+  const [subMapping, setSubMapping] = React.useState(() =>
+    clusters ? clusters.centers.map(() => 0) : []
+  )
+
+  const previewRaster = useMemo(() => {
+    if (!clusters || !imageData) return null
+    return buildRasterFromClusters(imageData.width, imageData.height, clusters.assignments, mapping, 2)
+  }, [clusters, imageData, mapping])
+
+  useEffect(() => {
+    if (!previewRaster) return
+    const canvas = previewCanvasRef.current
+    if (!canvas) return
+
+    canvas.width = previewRaster.width
+    canvas.height = previewRaster.height
+    const ctx = canvas.getContext('2d')
+
+    const imgData = new ImageData(previewRaster.width, previewRaster.height)
+    const { data } = imgData
+
+    for (let i = 0; i < previewRaster.data.length; i++) {
+      const labelId = previewRaster.data[i]
+      const [r, g, b] = LABELS[labelId]?.rgb ?? [100, 116, 139]
+      const base = i * 4
+      data[base] = r
+      data[base + 1] = g
+      data[base + 2] = b
+      data[base + 3] = 255
+    }
+
+    ctx.putImageData(imgData, 0, 0)
+
+    // 叠加原图，方便用户理解映射结果落在什么区域
+    if (sourceImage) {
+      ctx.globalAlpha = 0.35
+      ctx.drawImage(sourceImage, 0, 0, previewRaster.width, previewRaster.height)
+      ctx.globalAlpha = 1
+    }
+  }, [previewRaster, sourceImage])
+
+  const previewRaster = useMemo(() => {
+    if (!clusters || !imageData) return null
+    return buildRasterFromClusters(imageData.width, imageData.height, clusters.assignments, mapping, 2)
+  }, [clusters, imageData, mapping])
+
+  useEffect(() => {
+    if (!previewRaster) return
+    const canvas = previewCanvasRef.current
+    if (!canvas) return
+
+    canvas.width = previewRaster.width
+    canvas.height = previewRaster.height
+    const ctx = canvas.getContext('2d')
+
+    const imgData = new ImageData(previewRaster.width, previewRaster.height)
+    const { data } = imgData
+
+    for (let i = 0; i < previewRaster.data.length; i++) {
+      const labelId = previewRaster.data[i]
+      const [r, g, b] = LABELS[labelId]?.rgb ?? [100, 116, 139]
+      const base = i * 4
+      data[base] = r
+      data[base + 1] = g
+      data[base + 2] = b
+      data[base + 3] = 255
+    }
+
+    ctx.putImageData(imgData, 0, 0)
+
+    // 叠加原图，方便用户理解映射结果落在什么区域
+    if (sourceImage) {
+      ctx.globalAlpha = 0.35
+      ctx.drawImage(sourceImage, 0, 0, previewRaster.width, previewRaster.height)
+      ctx.globalAlpha = 1
+    }
+  }, [previewRaster, sourceImage])
+
+  const previewRaster = useMemo(() => {
+    if (!clusters || !imageData) return null
+    return buildRasterFromClusters(imageData.width, imageData.height, clusters.assignments, mapping, 2)
+  }, [clusters, imageData, mapping])
+
+  useEffect(() => {
+    if (!previewRaster) return
+    const canvas = previewCanvasRef.current
+    if (!canvas) return
+
+    canvas.width = previewRaster.width
+    canvas.height = previewRaster.height
+    const ctx = canvas.getContext('2d')
+
+    const imgData = new ImageData(previewRaster.width, previewRaster.height)
+    const { data } = imgData
+
+    for (let i = 0; i < previewRaster.data.length; i++) {
+      const labelId = previewRaster.data[i]
+      const [r, g, b] = LABELS[labelId]?.rgb ?? [100, 116, 139]
+      const base = i * 4
+      data[base] = r
+      data[base + 1] = g
+      data[base + 2] = b
+      data[base + 3] = 255
+    }
+
+    ctx.putImageData(imgData, 0, 0)
+
+    // 叠加原图，方便用户理解映射结果落在什么区域
+    if (sourceImage) {
+      ctx.globalAlpha = 0.35
+      ctx.drawImage(sourceImage, 0, 0, previewRaster.width, previewRaster.height)
+      ctx.globalAlpha = 1
+    }
+  }, [previewRaster, sourceImage])
+
+  const previewRasterMemo = useMemo(() => {
+    if (!clusters || !imageData) return null
+    return buildRasterFromClusters(imageData.width, imageData.height, clusters.assignments, mapping, 2)
+  }, [clusters, imageData, mapping])
+
+  useEffect(() => {
+    if (!previewRasterMemo) return
+    const canvas = previewCanvasRef.current
+    if (!canvas) return
+
+    canvas.width = previewRasterMemo.width
+    canvas.height = previewRasterMemo.height
+    const ctx = canvas.getContext('2d')
+
+    const imgData = new ImageData(previewRasterMemo.width, previewRasterMemo.height)
+    const { data } = imgData
+
+    for (let i = 0; i < previewRasterMemo.data.length; i++) {
+      const labelId = previewRasterMemo.data[i]
+      const [r, g, b] = LABELS[labelId]?.rgb ?? [100, 116, 139]
+      const base = i * 4
+      data[base] = r
+      data[base + 1] = g
+      data[base + 2] = b
+      data[base + 3] = 255
+    }
+
+    ctx.putImageData(imgData, 0, 0)
+
+    // 叠加原图，方便用户理解映射结果落在什么区域
+    if (sourceImage) {
+      ctx.globalAlpha = 0.35
+      ctx.drawImage(sourceImage, 0, 0, previewRasterMemo.width, previewRasterMemo.height)
+      ctx.globalAlpha = 1
+    }
+  }, [previewRasterMemo, sourceImage])
+
+  const previewGrid = useMemo(() => {
+    if (!clusters || !imageData) return null
+    return buildRasterFromClusters(imageData.width, imageData.height, clusters.assignments, mapping, 2)
+  }, [clusters, imageData, mapping])
+
+  useEffect(() => {
+    if (!previewGrid) return
+    const canvas = previewCanvasRef.current
+    if (!canvas) return
+
+    canvas.width = previewGrid.width
+    canvas.height = previewGrid.height
+    const ctx = canvas.getContext('2d')
+
+    const imgData = new ImageData(previewGrid.width, previewGrid.height)
+    const { data } = imgData
+
+    for (let i = 0; i < previewGrid.data.length; i++) {
+      const labelId = previewGrid.data[i]
+      const [r, g, b] = LABELS[labelId]?.rgb ?? [100, 116, 139]
+      const base = i * 4
+      data[base] = r
+      data[base + 1] = g
+      data[base + 2] = b
+      data[base + 3] = 255
+    }
+
+    ctx.putImageData(imgData, 0, 0)
+
+    // 叠加原图，方便用户理解映射结果落在什么区域
+    if (sourceImage) {
+      ctx.globalAlpha = 0.35
+      ctx.drawImage(sourceImage, 0, 0, previewGrid.width, previewGrid.height)
+      ctx.globalAlpha = 1
+    }
+  }, [previewGrid, sourceImage])
 
 
   useEffect(() => {
@@ -101,6 +290,20 @@ export default function ClusterMapper() {
         <p style={styles.desc}>
           K-means 聚类检测到 {clusters.centers.length} 种主色调，请为每种颜色指定对应的用地类型。
         </p>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+          <button
+            style={{ ...styles.modeBtn, ...(mappingMode === 'primary' ? styles.modeBtnActive : {}) }}
+            onClick={() => setMappingMode('primary')}
+          >
+            主类映射
+          </button>
+          <button
+            style={{ ...styles.modeBtn, ...(mappingMode === 'subcategory' ? styles.modeBtnActive : {}) }}
+            onClick={() => setMappingMode('subcategory')}
+          >
+            子类映射
+          </button>
+        </div>
 
         <div style={styles.grid}>
           {clusters.centers.map((center, i) => (
@@ -117,9 +320,13 @@ export default function ClusterMapper() {
                   const next = [...mapping]
                   next[i] = parseInt(e.target.value)
                   setMapping(next)
+                  // 切换主类时重置子类
+                  const nextSub = [...subMapping]
+                  nextSub[i] = 0
+                  setSubMapping(nextSub)
                 }}
               >
-                {LABELS.map(l => (
+                {ACTIVE_LABELS.map(l => (
                   <option key={l.id} value={l.id}>
                     {l.name}
                   </option>
@@ -237,5 +444,20 @@ const styles = {
     fontSize: '13px', fontFamily: "'DM Mono', monospace",
     fontWeight: '500', cursor: 'pointer', borderRadius: '4px',
     letterSpacing: '0.03em',
+  },
+  modeBtn: {
+    padding: '6px 12px',
+    background: 'transparent',
+    border: '1px solid #1e2d3d',
+    color: '#64748b',
+    fontSize: '11px',
+    fontFamily: "'DM Mono', monospace",
+    borderRadius: '3px',
+    cursor: 'pointer',
+  },
+  modeBtnActive: {
+    borderColor: '#22c55e',
+    color: '#22c55e',
+    background: '#22c55e11',
   },
 }

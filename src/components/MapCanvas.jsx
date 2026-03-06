@@ -44,6 +44,7 @@ export default function MapCanvas() {
 
     const imgData = new ImageData(raster.width, raster.height)
     const { data } = imgData
+    const useSub = showSubCategories && subCategoryMap
     for (let i = 0; i < raster.data.length; i++) {
       const labelId = raster.data[i]
       const layer = layerSettings[labelId] ?? { visible: true }
