@@ -243,6 +243,23 @@ export default function ClusterMapper() {
     }
   }, [clusters, imageData, mapping, sourceImage])
 
+
+  useEffect(() => {
+    if (!clusters || !imageData) return
+    const canvas = previewCanvasRef.current
+    if (!canvas) return
+
+    const previewGrid = buildRasterFromClusters(
+      imageData.width,
+      imageData.height,
+      clusters.assignments,
+      mapping,
+      2,
+    )
+
+    drawPreviewToCanvas(canvas, previewGrid, sourceImage)
+  }, [clusters, imageData, mapping, sourceImage])
+
   const confirmMapping = async () => {
     if (!clusters || !imageData) {
       alert('映射数据不完整，请重新上传图像后再试。')
@@ -345,6 +362,34 @@ export default function ClusterMapper() {
       </div>
     </div>
   )
+}
+
+function drawPreviewToCanvas(canvas, previewGrid, sourceImage) {
+  canvas.width = previewGrid.width
+  canvas.height = previewGrid.height
+  const ctx = canvas.getContext('2d')
+
+  const imgData = new ImageData(previewGrid.width, previewGrid.height)
+  const { data } = imgData
+
+  for (let i = 0; i < previewGrid.data.length; i++) {
+    const labelId = previewGrid.data[i]
+    const [r, g, b] = LABELS[labelId]?.rgb ?? [100, 116, 139]
+    const base = i * 4
+    data[base] = r
+    data[base + 1] = g
+    data[base + 2] = b
+    data[base + 3] = 255
+  }
+
+  ctx.putImageData(imgData, 0, 0)
+
+  // 叠加原图，方便用户理解映射结果落在什么区域
+  if (sourceImage) {
+    ctx.globalAlpha = 0.35
+    ctx.drawImage(sourceImage, 0, 0, previewGrid.width, previewGrid.height)
+    ctx.globalAlpha = 1
+  }
 }
 
 function guessLabel([r, g, b]) {
