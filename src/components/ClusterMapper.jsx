@@ -1,32 +1,98 @@
-import { useState } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { useStore } from '../store/useStore.js'
-import { LABELS } from '../core/raster.js'
-import { buildRasterFromClusters } from '../core/raster.js'
+import { LABELS, buildRasterFromClusters } from '../core/raster.js'
 import { rgbToHex } from '../core/kmeans.js'
 
 export default function ClusterMapper() {
-  const { clusters, imageData, setRaster, setClusterToLabel, setProcessing } = useStore()
-  const [mapping, setMapping] = useState(() => {
+  const { clusters, imageData, sourceImage, setRaster, setClusterToLabel, setProcessing } = useStore()
+  const previewCanvasRef = useRef(null)
+
+  const [mapping, setMapping] = React.useState(() => {
     // 初始化时用颜色相似度做默认猜测
     if (!clusters) return []
     return clusters.centers.map(center => guessLabel(center))
   })
 
-  const confirmMapping = async () => {
-    setProcessing(true, '建立点阵数据模型...')
-    await new Promise(r => setTimeout(r, 30))
 
-    const { width, height } = imageData
-    const raster = buildRasterFromClusters(width, height, clusters.assignments, mapping, 2)
-    setClusterToLabel(mapping)
-    setRaster(raster)
-    setProcessing(false)
+  useEffect(() => {
+    if (!clusters || !imageData) return
+    const canvas = previewCanvasRef.current
+    if (!canvas) return
+
+    const previewGrid = buildRasterFromClusters(
+      imageData.width,
+      imageData.height,
+      clusters.assignments,
+      mapping,
+      2,
+    )
+
+    canvas.width = previewGrid.width
+    canvas.height = previewGrid.height
+    const ctx = canvas.getContext('2d')
+
+    const imgData = new ImageData(previewGrid.width, previewGrid.height)
+    const { data } = imgData
+
+    for (let i = 0; i < previewGrid.data.length; i++) {
+      const labelId = previewGrid.data[i]
+      const [r, g, b] = LABELS[labelId]?.rgb ?? [100, 116, 139]
+      const base = i * 4
+      data[base] = r
+      data[base + 1] = g
+      data[base + 2] = b
+      data[base + 3] = 255
+    }
+
+    ctx.putImageData(imgData, 0, 0)
+
+    // 叠加原图，方便用户理解映射结果落在什么区域
+    if (sourceImage) {
+      ctx.globalAlpha = 0.35
+      ctx.drawImage(sourceImage, 0, 0, previewGrid.width, previewGrid.height)
+      ctx.globalAlpha = 1
+    }
+  }, [clusters, imageData, mapping, sourceImage])
+
+  const confirmMapping = async () => {
+    if (!clusters || !imageData) {
+      alert('映射数据不完整，请重新上传图像后再试。')
+      return
+    }
+
+    setProcessing(true, '建立点阵数据模型...')
+    try {
+      await new Promise(r => setTimeout(r, 30))
+      const nextRaster = buildRasterFromClusters(
+        imageData.width,
+        imageData.height,
+        clusters.assignments,
+        mapping,
+        2,
+      )
+
+      if (!nextRaster?.width || !nextRaster?.height || !nextRaster?.data?.length) {
+        throw new Error('点阵数据为空')
+      }
+
+      setClusterToLabel(mapping)
+      setRaster(nextRaster)
+    } catch (e) {
+      alert(`建立底图失败：${e.message || '未知错误'}`)
+    } finally {
+      setProcessing(false)
+    }
   }
 
   if (!clusters) return null
 
   return (
     <div style={styles.overlay}>
+      <div style={styles.previewBackdrop}>
+        <canvas ref={previewCanvasRef} style={styles.previewCanvas} />
+        <div style={styles.previewHint}>实时预览：调整右侧标签映射时，此图会同步更新</div>
+      </div>
+
       <div style={styles.modal}>
         <div style={styles.header}>
           <span style={styles.headerIcon}>◈</span>
@@ -39,13 +105,11 @@ export default function ClusterMapper() {
         <div style={styles.grid}>
           {clusters.centers.map((center, i) => (
             <div key={i} style={styles.row}>
-              {/* 色块 */}
               <div style={{ ...styles.swatch, background: rgbToHex(center) }} />
               <div style={styles.rgbLabel}>
                 {`RGB(${center[0]},${center[1]},${center[2]})`}
               </div>
               <span style={styles.arrow}>→</span>
-              {/* 标签选择器 */}
               <select
                 style={styles.select}
                 value={mapping[i] ?? 0}
@@ -61,7 +125,6 @@ export default function ClusterMapper() {
                   </option>
                 ))}
               </select>
-              {/* 标签色点 */}
               <div style={{ ...styles.labelDot, background: LABELS[mapping[i] ?? 0]?.color }} />
             </div>
           ))}
@@ -77,31 +140,61 @@ export default function ClusterMapper() {
   )
 }
 
-// 根据 RGB 猜测最可能的标签
 function guessLabel([r, g, b]) {
   const scores = [
-    [0, 0], // 未分类 - fallback
-    [1, Math.abs(r - 217) + Math.abs(g - 119) + Math.abs(b - 6)],     // 建筑
-    [2, Math.abs(r - 156) + Math.abs(g - 163) + Math.abs(b - 175)],   // 道路
-    [3, Math.abs(r - 22)  + Math.abs(g - 163) + Math.abs(b - 74)],    // 绿地
-    [4, Math.abs(r - 37)  + Math.abs(g - 99)  + Math.abs(b - 235)],   // 水体
-    [5, Math.abs(r - 202) + Math.abs(g - 138) + Math.abs(b - 4)],     // 农田
-    [6, Math.abs(r - 180) + Math.abs(g - 83)  + Math.abs(b - 9)],     // 裸地
-    [7, Math.abs(r - 124) + Math.abs(g - 58)  + Math.abs(b - 237)],   // 其他
+    [0, 0],
+    [1, Math.abs(r - 217) + Math.abs(g - 119) + Math.abs(b - 6)],
+    [2, Math.abs(r - 107) + Math.abs(g - 114) + Math.abs(b - 128)],
+    [3, Math.abs(r - 22) + Math.abs(g - 163) + Math.abs(b - 74)],
+    [4, Math.abs(r - 37) + Math.abs(g - 99) + Math.abs(b - 235)],
+    [5, Math.abs(r - 202) + Math.abs(g - 138) + Math.abs(b - 4)],
+    [6, Math.abs(r - 180) + Math.abs(g - 83) + Math.abs(b - 9)],
+    [7, Math.abs(r - 124) + Math.abs(g - 58) + Math.abs(b - 237)],
+    [8, Math.abs(r - 156) + Math.abs(g - 163) + Math.abs(b - 175)],
   ]
   scores[0][1] = 9999
-  return scores.reduce((best, cur) => cur[1] < best[1] ? cur : best)[0]
+  return scores.reduce((best, cur) => (cur[1] < best[1] ? cur : best))[0]
 }
 
 const styles = {
   overlay: {
     position: 'fixed', inset: 0,
-    background: '#000000cc',
+    background: '#000000b3',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     zIndex: 1000,
-    backdropFilter: 'blur(4px)',
+    backdropFilter: 'blur(2px)',
+    padding: '24px',
+  },
+  previewBackdrop: {
+    position: 'absolute',
+    inset: '24px 600px 24px 24px',
+    border: '1px solid #1e2d3d',
+    borderRadius: '8px',
+    background: '#080d12',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  previewCanvas: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'contain',
+    imageRendering: 'pixelated',
+  },
+  previewHint: {
+    position: 'absolute',
+    left: '12px',
+    bottom: '12px',
+    fontSize: '11px',
+    color: '#cbd5e1',
+    background: '#0d1117cc',
+    border: '1px solid #334155',
+    borderRadius: '4px',
+    padding: '6px 8px',
   },
   modal: {
+    marginLeft: 'auto',
     background: '#0d1117',
     border: '1px solid #1e2d3d',
     borderRadius: '8px',
