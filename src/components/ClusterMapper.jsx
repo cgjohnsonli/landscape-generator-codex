@@ -128,6 +128,43 @@ export default function ClusterMapper() {
     }
   }, [previewRaster, sourceImage])
 
+  const previewRasterMemo = useMemo(() => {
+    if (!clusters || !imageData) return null
+    return buildRasterFromClusters(imageData.width, imageData.height, clusters.assignments, mapping, 2)
+  }, [clusters, imageData, mapping])
+
+  useEffect(() => {
+    if (!previewRasterMemo) return
+    const canvas = previewCanvasRef.current
+    if (!canvas) return
+
+    canvas.width = previewRasterMemo.width
+    canvas.height = previewRasterMemo.height
+    const ctx = canvas.getContext('2d')
+
+    const imgData = new ImageData(previewRasterMemo.width, previewRasterMemo.height)
+    const { data } = imgData
+
+    for (let i = 0; i < previewRasterMemo.data.length; i++) {
+      const labelId = previewRasterMemo.data[i]
+      const [r, g, b] = LABELS[labelId]?.rgb ?? [100, 116, 139]
+      const base = i * 4
+      data[base] = r
+      data[base + 1] = g
+      data[base + 2] = b
+      data[base + 3] = 255
+    }
+
+    ctx.putImageData(imgData, 0, 0)
+
+    // 叠加原图，方便用户理解映射结果落在什么区域
+    if (sourceImage) {
+      ctx.globalAlpha = 0.35
+      ctx.drawImage(sourceImage, 0, 0, previewRasterMemo.width, previewRasterMemo.height)
+      ctx.globalAlpha = 1
+    }
+  }, [previewRasterMemo, sourceImage])
+
   const confirmMapping = async () => {
     if (!clusters || !imageData) {
       alert('映射数据不完整，请重新上传图像后再试。')
