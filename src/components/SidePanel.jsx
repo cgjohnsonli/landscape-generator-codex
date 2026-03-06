@@ -130,28 +130,50 @@ function LabelPanel() {
 }
 
 function StatsPanel({ raster }) {
+  const { subCategoryMap } = useStore()
   if (!raster) return <div style={styles.empty}>暂无数据</div>
   const stats = computeStats(raster)
+  const subStats = computeSubCategoryStats(raster, subCategoryMap)
   const cellArea = (raster.cellSize ** 2)
+  const total = raster.width * raster.height
   return (
     <div>
       <div style={styles.sectionTitle}>用地面积统计</div>
       <div style={styles.statsMeta}>
         栅格: {raster.width}×{raster.height} &nbsp;|&nbsp; 格元: {raster.cellSize}m
       </div>
-      {stats.filter(s => s.cells > 0).map(s => (
-        <div key={s.id} style={styles.statRow}>
-          <div style={styles.statHeader}>
-            <div style={{ ...styles.statDot, background: s.color }} />
-            <span style={styles.statName}>{s.name}</span>
-            <span style={styles.statPct}>{s.percent}%</span>
+      {stats.filter(s => s.cells > 0 && !LABELS[s.id]?.deprecated).map(s => (
+        <div key={s.id}>
+          <div style={styles.statRow}>
+            <div style={styles.statHeader}>
+              <div style={{ ...styles.statDot, background: s.color }} />
+              <span style={styles.statName}>{s.name}</span>
+              <span style={styles.statPct}>{s.percent}%</span>
+            </div>
+            <div style={styles.barTrack}>
+              <div style={{ ...styles.barFill, width: `${s.percent}%`, background: s.color }} />
+            </div>
+            <div style={styles.statArea}>
+              {(s.cells * cellArea / 1e4).toFixed(2)} hm²
+            </div>
           </div>
-          <div style={styles.barTrack}>
-            <div style={{ ...styles.barFill, width: `${s.percent}%`, background: s.color }} />
-          </div>
-          <div style={styles.statArea}>
-            {(s.cells * cellArea / 1e4).toFixed(2)} hm²
-          </div>
+          {subStats[s.id] && Object.entries(subStats[s.id]).map(([subId, count]) => {
+            const sub = getSubCategories(s.id).find(sc => sc.subId === Number(subId))
+            if (!sub) return null
+            const subPct = total > 0 ? ((count / total) * 100).toFixed(1) : '0.0'
+            return (
+              <div key={subId} style={{ ...styles.statRow, paddingLeft: '16px', marginBottom: '6px' }}>
+                <div style={styles.statHeader}>
+                  <div style={{ ...styles.statDot, width: '6px', height: '6px', background: getSubCategoryColor(s.id, Number(subId)) }} />
+                  <span style={{ ...styles.statName, fontSize: '10px' }}>{sub.name}</span>
+                  <span style={styles.statPct}>{subPct}%</span>
+                </div>
+                <div style={styles.barTrack}>
+                  <div style={{ ...styles.barFill, width: `${subPct}%`, background: getSubCategoryColor(s.id, Number(subId)) }} />
+                </div>
+              </div>
+            )
+          })}
         </div>
       ))}
     </div>

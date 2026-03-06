@@ -43,16 +43,23 @@ export function redo(history, ...args) {
 
 /**
  * 从 changed 数组（fillPolygon / paintBrush 的返回值）创建 Command
- * changed: [{ idx, old, labelId }, ...]
+ * changed: [{ idx, old, labelId, oldSub?, subId? }, ...]
+ * 当 changed 记录包含 oldSub/subId 时，同步撤销/重做子类数据
  */
 export function changedToCommand(changed, label = '') {
   return {
     label,
-    redo(raster) {
-      for (const { idx, labelId } of changed) raster.data[idx] = labelId
+    redo(raster, _dMap, subCatMap) {
+      for (const c of changed) {
+        raster.data[c.idx] = c.labelId
+        if (subCatMap && c.subId !== undefined) subCatMap[c.idx] = c.subId
+      }
     },
-    undo(raster) {
-      for (const { idx, old } of changed) raster.data[idx] = old
+    undo(raster, _dMap, subCatMap) {
+      for (const c of changed) {
+        raster.data[c.idx] = c.old
+        if (subCatMap && c.oldSub !== undefined) subCatMap[c.idx] = c.oldSub
+      }
     },
   }
 }
